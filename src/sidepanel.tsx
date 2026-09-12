@@ -1,3 +1,4 @@
+import {RequestsPanel} from './RequestsPanel';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Check, ChevronRight, CircleMinus, ExternalLink, Eye, ListFilter, PanelRight, RefreshCw, Settings2, ShieldCheck, Sparkles, Undo2, X } from 'lucide-react';
@@ -6,6 +7,7 @@ import type { FieldReport, PanelReply } from './panel-types';
 import './sidepanel.css';
 
 function SidePanel() {
+  const [view,setView]=useState<'fields'|'requests'>('fields');
   const [page,setPage]=useState<PanelReply|null>(null);
   const [error,setError]=useState('');
   const [actionError,setActionError]=useState('');
@@ -75,7 +77,8 @@ function SidePanel() {
   const editor=active&&<section className="field-editor" aria-label="Field controls"><div className="editor-heading"><h2>{active.label}</h2><button className="icon-button" aria-label="Close field controls" onClick={()=>setSelected(null)}><X size={17}/></button></div><button className="text-button" disabled={!!busy} onClick={()=>void action('highlight',active.id)}><Eye size={15}/> Show on page</button>{active.editable&&active.reason!=='Excluded by your settings'?<form onSubmit={e=>{e.preventDefault();void action('rule',active.id);}}><label htmlFor="field-value">Custom test value</label><input id="field-value" value={value} onChange={e=>setValue(e.target.value)} placeholder="e.g. PRJ-001" maxLength={5000} required/><p className="hint">Saved for this field on this website.</p><button className="secondary" disabled={!!busy || !value.trim()}>Save field rule</button><button className="text-button exclude" type="button" disabled={!!busy} onClick={()=>void action('exclude',active.id)}>Exclude this field</button></form>:<p className="hint">{active.reason}. You can manage generator settings and exclusions in Options.</p>}</section>;
   return <div className="panel-shell">
     <header className="panel-header"><a className="brand" href="./welcome.html" target="_blank" rel="noreferrer"><img src="./icons/icon-32.png" alt=""/><strong>formly</strong></a><span className="companion">PAGE COMPANION</span><button className="icon-button" aria-label="Open settings" title="Open settings" onClick={()=>installed?void chrome.runtime.openOptionsPage():window.open('./index.html','_blank')}><Settings2 size={18}/></button></header>
-    <main aria-busy={!!busy || loading} data-document-id={page?.documentId}>
+    <nav className="companion-tabs" aria-label="Panel views"><button aria-pressed={view==='fields'} onClick={()=>setView('fields')}>Fields</button><button aria-pressed={view==='requests'} onClick={()=>setView('requests')}>Requests</button></nav>
+    <main hidden={view!=='fields'} aria-busy={!!busy || loading} data-document-id={page?.documentId}>
       <section className="page-heading"><p className="eyebrow">YOUR FORM, AT A GLANCE</p><h1>A little help.<br/><span>Right beside you.</span></h1><p className="site-name"><ShieldCheck size={14}/>{page?.origin?new URL(page.origin).host:'Your current website'}</p></section>
       <div className="primary-actions"><button className="primary" disabled={!page || !!busy || loading} onClick={()=>void action('fill')}><Sparkles size={17}/>{busy==='fill'?'Filling your form…':filled?'Fill again':'Fill this page'}</button><button className="icon-button refresh" title="Refresh field list" aria-label="Refresh field list" disabled={!!busy} onClick={()=>void refresh(true)}><RefreshCw size={17}/></button></div>
       <button className="undo" disabled={!page?.canUndo || !!busy} onClick={()=>void action('undo')}><Undo2 size={15}/>{busy==='undo'?'Restoring…':'Undo last fill'}</button>
@@ -91,6 +94,7 @@ function SidePanel() {
       </>}
 
     </main>
+    {view==='requests'&&<main><RequestsPanel/></main>}
     <footer className="panel-footer"><span><span className="status-dot"/>You control submission</span><a href="./index.html" target="_blank" rel="noreferrer">All settings <ExternalLink size={12}/></a></footer>
   </div>;
 }

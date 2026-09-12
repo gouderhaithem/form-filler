@@ -63,7 +63,19 @@ Use the field list to inspect filled/skipped results, highlight a control, save 
 
 The list refreshes after tab changes and periodically while open. On a new website, click Formly or reopen its panel from the icon’s menu if access is needed. Restricted browser pages, frames, and custom widgets retain the existing limitations.
 
-The panel needs Chrome 116+ or a compatible Edge version. Customize the shortcut in your browser’s extension shortcuts page.
+The panel needs Chrome 118+ or a compatible Edge version. Customize the shortcut in your browser’s extension shortcuts page.
+
+## Request inspector
+
+Choose **Requests → Start recording** in the side panel before submitting a form. Select a request to inspect the method, endpoint, HTTP status, duration, request headers/body, and response headers/body. Use the endpoint filter and Request/Response tabs to navigate the history. Copy copies the displayed body, including any redactions.
+
+Chrome requires the `debugger` permission in the extension manifest for this feature. Recording itself remains off until started. Chrome displays a debugging notice while the recorder is attached. Stop recording to detach it. Switching tabs in the same window stops recording and preserves the captured history. Closing the recorded tab clears history. A new recording starts a fresh history.
+
+Captures stay in service-worker memory, with no persistence, browser sync, or Gemini transmission. Known credential headers, sensitive query parameters, and named JSON/form fields are hidden. Unstructured bodies may still contain submitted information. History contains at most 50 Fetch, XHR, and document requests. Request and response previews are limited to 64 KB each. Multipart and binary payloads are omitted. Streaming responses, browser-evicted bodies, and separate iframe/worker targets may be unavailable. Headers are those Chrome exposes in its Network events.
+
+Redirects appear as separate rows. Network failures show the browser error. An HTTP 2xx status does not prove that the application accepted the form: inspect its response for validation errors. Requests are not automatically correlated to a particular form submission.
+
+Opening DevTools, another debugger, or canceling Chrome’s debugging notice can interrupt recording. Start again when the tab is available. This initial version does not edit or resend requests.
 
 ## Gemini (optional)
 

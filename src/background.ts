@@ -1,3 +1,4 @@
+import './network-background';
 import { panelPageAction } from './panel-page';
 import { generateIdentities, generateValues, validateSettings, type Settings } from './data';
 import { generateSamples } from './samples';

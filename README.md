@@ -6,7 +6,7 @@
 <p align="center">Fill website forms with fresh, fictional test data in one toolbar click.</p>
 <p align="center">
   <a href="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml"><img src="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml/badge.svg" alt="Build and tests" /></a>
-  <img src="https://img.shields.io/badge/version-0.8.0-5370ce" alt="Version 0.7.0" />
+  <img src="https://img.shields.io/badge/version-0.9.0-5370ce" alt="Version 0.7.0" />
   <img src="https://img.shields.io/badge/Chrome_%26_Edge-Manifest_V3-527b66" alt="Chrome and Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/TypeScript-React-3178c6" alt="TypeScript and React" />
 </p>
@@ -27,6 +27,7 @@ Formly is a browser extension for developers and QA testers who repeatedly fill 
 
 | | What you can do |
 | --- | --- |
+| **Request inspector** | Record a tab’s submissions and inspect endpoints, payloads, headers, HTTP status, timing, and responses. |
 | **Side panel** | Inspect filled/skipped fields beside the website, highlight a control, and save a custom value or exclusion. |
 | **Undo last fill** | Restore the previous values while preserving fields you edited afterward. |
 | **One-click filling** | Fill the active page directly from the toolbar and see the filled-field count on the icon. |
@@ -77,9 +78,25 @@ Right-click the Formly toolbar icon and choose **Open Formly panel**, or press *
 
 Undo keeps one fill per document, preserves later manual edits, and resets when the document reloads. Previous values stay in the page's isolated extension context and never go to Gemini. Undo restores form controls, not other effects a website may trigger when a value changes.
 
-Requires Chrome 116+ or an Edge version supporting the Side Panel API. Change a conflicting shortcut at `chrome://extensions/shortcuts` or `edge://extensions/shortcuts`.
+Requires Chrome 118+ or an Edge version supporting the Side Panel API. Change a conflicting shortcut at `chrome://extensions/shortcuts` or `edge://extensions/shortcuts`.
 
 <img src="docs/images/sidepanel.png" width="420" alt="Formly native side panel showing individual field results and fill controls" />
+
+### Inspect submitted requests
+
+Open the side panel → **Requests → Start recording**, then submit your form on the website. Select a captured request to see its endpoint, method, submitted data, headers, HTTP status, elapsed time, and response. JSON is formatted for reading, and you can copy the displayed body.
+
+<img src="docs/images/requests.png" width="420" alt="Formly Requests tab showing a POST endpoint, 201 Created status, submitted request, and JSON response" />
+
+Recording is off by default. Chrome requires the **`debugger` permission** for response capture and displays a debugging notice while recording. Recording stops when you click Stop, switch tabs in that window, close the recorded tab, or Chrome detaches the debugger. Opening DevTools or using another debugger can interrupt capture.
+
+- Captures stay in service-worker memory and **never go to Gemini** or extension storage. Closing the recorded tab clears its history. Starting a new recording replaces the previous history.
+- The inspector keeps the latest **50 Fetch, XHR, and document requests**, including redirect hops. It does not identify which request belongs to a form automatically.
+- Request and response text previews are limited to **64 KB each**. Binary responses and multipart payloads are omitted. Streams, browser-evicted bodies, and requests in separate iframe/worker targets may be unavailable.
+- Known credential headers and named JSON/form fields are hidden. Other text or HTML can contain submitted information. Review the displayed data before copying it.
+- HTTP success does not guarantee application success. Read the response for validation errors.
+
+This first version captures and inspects requests. Editing and resending requests is a later step.
 
 ### Optional Gemini setup
 
@@ -104,7 +121,7 @@ A six-slide product walkthrough covers the filling workflow, supported fields, o
 - File uploads, hidden/disabled/read-only controls, and detected consent, payment, and one-time-code fields are skipped. Formly never submits forms.
 - Generated data is fictional. Finite sample pools can repeat, and website-specific validation may reject values. Address and phone regions do not necessarily match the selected language.
 
-The extension uses `activeTab`, `scripting`, `storage`, and `alarms`, plus `sidePanel` and `contextMenus` for the page companion. Automatic Gemini preparation requests optional HTTP/HTTPS website access. [Full privacy and permissions details →](docs/USER_GUIDE.md#privacy--permissions)
+The extension uses `activeTab`, `scripting`, `storage`, and `alarms`, plus `sidePanel` and `contextMenus` for the page companion. The `debugger` permission supports opt-in request recording. Automatic Gemini preparation requests optional HTTP/HTTPS website access. [Full privacy and permissions details →](docs/USER_GUIDE.md#privacy--permissions)
 
 ## Development
 
@@ -127,6 +144,7 @@ Run `npm run build` before the browser tests. CI runs the build and both test su
 | `src/data.ts`, `src/samples.ts` | Fictional values and multilingual samples |
 | `src/background.ts` | Toolbar action, Gemini preparation, and session cache |
 | `src/gemini.ts` | Provider requests, response validation, and cache configuration |
+| `src/RequestsPanel.tsx`, `src/network-recorder.ts` | Request inspector and bounded network capture |
 | `src/sidepanel.tsx`, `src/panel-page.ts` | Side panel interface, field highlighting, and undo |
 | `src/main.tsx` | Options interface and development preview |
 | `src/welcome.tsx` | First-install guide and interactive example |

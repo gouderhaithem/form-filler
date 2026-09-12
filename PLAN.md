@@ -91,3 +91,12 @@ Migrate older saved settings to replacement and unknown-field filling. Generate 
 - Store one undo snapshot in the document’s isolated extension context, preserving later edits and rejecting stale document/field references.
 - Refresh the panel on tab changes and navigation without adding permanent website access.
 - Validate native panel interactions in Chromium, including undo, rules, exclusions, tab changes, and narrow layouts.
+
+## v0.9 request inspector experiment
+
+- Keep this feature in one independently revertible commit.
+- Add a Requests view beside Fields with explicit recording controls and a read-only request/response inspector.
+- Attach the Chrome debugger only to the chosen HTTP/HTTPS tab, record Fetch/XHR/document requests, and stop on tab switching or detachment.
+- Bound memory and body previews, hide known credential fields, and avoid persistence or Gemini transmission.
+- Validate actual network traffic against a local HTTP server, including redirects, validation errors, network failures, limits, and recording lifecycle.
+- Leave editing and resending requests for a follow-up change.

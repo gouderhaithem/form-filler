@@ -50,22 +50,28 @@ test('a form that grows after filling keeps reusing its cached suggestions',asyn
     const {targetInfos}=await cdp.send('Target.getTargets',{filter:[{type:'tab',exclude:false},{exclude:true}]});
     const target=targetInfos.find(t=>t.url===website.url())!;
 
+    const tabId=await worker.evaluate(async()=> (await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0].id!);
+    async function fillAndWait(expected:string) {
+      // The DOM changes before the worker finishes saving its cache and releasing the fill lock.
+      await worker.evaluate(tabId=>chrome.action.setTitle({tabId,title:'Waiting for fill completion'}),tabId);
+      await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
+      await expect(website.locator('#project-code')).toHaveValue(expected);
+      await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getTitle({tabId}),tabId)).toMatch(/^Formly: \d+ filled,/);
+    }
+
     // Filling reveals "Confirm project code", so the scanned form is no longer the one Gemini saw.
-    await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
-    await expect(website.locator('#project-code')).toHaveValue('Cedar');
+    await fillAndWait('Cedar');
     await expect(website.locator('#confirm-code')).toHaveValue('');
 
     // The revealed field is the only thing worth asking about; the originals keep their cached values.
-    await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
-    await expect(website.locator('#project-code')).toHaveValue('Maple');
+    await fillAndWait('Maple');
     await expect(website.locator('#confirm-code')).toHaveValue('Cedar');
     expect(await requests()).toEqual([['Project code name','Why are you interested?'],['Confirm project code']]);
     expect(await worker.evaluate(async()=>Object.entries(await chrome.storage.session.get(null)).find(([key])=>key.startsWith('gemini-cache:'))![1].expiresAt)).toBe(expiresAt);
 
     // The settled form must now fill entirely from cache, however often it is clicked.
     for(const expected of ['Willow','Birch','Oak']) {
-      await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
-      await expect(website.locator('#project-code')).toHaveValue(expected);
+      await fillAndWait(expected);
     }
     expect((await requests()).length).toBe(2);
     await expect.poll(()=>worker.evaluate(async()=>Object.keys(await chrome.storage.session.get(null)).filter(key=>key.startsWith('gemini-cache:')).length)).toBe(1);
