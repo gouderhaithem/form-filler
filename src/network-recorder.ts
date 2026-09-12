@@ -1,4 +1,4 @@
-import {bodyPreview,cleanHeaders,cleanURL,MAX_BODY_BYTES,MAX_REQUESTS,type CaptureState,type RequestEntry} from './network';
+import {bodyPreview,editableBody,cleanHeaders,cleanURL,MAX_BODY_BYTES,MAX_REQUESTS,type CaptureState,type RequestEntry} from './network';
 interface DebuggerAPI {
   attach:(tabId:number)=>Promise<void>;
   detach:(tabId:number)=>Promise<void>;
@@ -18,7 +18,7 @@ export class NetworkRecorder {
   private transitioning=false;
   constructor(private api:DebuggerAPI){}
   get state(){return structuredClone(this.capture);}
-  view(selectedId?:string):CaptureState{return {...this.capture,entries:this.capture.entries.map(entry=>entry.id===selectedId?{...entry}:{...entry,requestBody:undefined,responseBody:undefined,requestHeaders:{},responseHeaders:{}})};}
+  view(selectedId?:string):CaptureState{return {...this.capture,entries:this.capture.entries.map(entry=>entry.id===selectedId?{...entry}:{...entry,requestBody:undefined,editableBody:undefined,responseBody:undefined,requestHeaders:{},responseHeaders:{}})};}
   async start(tabId:number,site:string) {
     if(this.transitioning)throw new Error('Recording is changing. Try again in a moment.');
     if(this.capture.recording){if(this.capture.tabId===tabId)return;throw new Error('Stop the current recording first.');}
@@ -65,11 +65,11 @@ export class NetworkRecorder {
       this.capture.entries.push(entry);this.rows.set(key,{entry,timestamp:event.timestamp || 0});
       if(this.capture.entries.length>MAX_REQUESTS){const removed=this.capture.entries.shift();for(const [id,row] of this.rows)if(row.entry===removed)this.rows.delete(id);}
       const mime=Object.entries(event.request.headers || {}).find(([name])=>name.toLowerCase()==='content-type')?.[1];
-      const applyBody=(body:string)=>{const preview=bodyPreview(body,String(mime || ''));entry.requestBody=preview.text;if(preview.note)entry.bodyNote=preview.note;};
+      const applyBody=(body:string)=>{const preview=bodyPreview(body,String(mime || ''));entry.requestBody=preview.text;entry.editableBody=editableBody(body,String(mime || ''));if(preview.note){entry.bodyNote=preview.note;entry.requestBodyNote=preview.note;}};
       if(event.request.postData!==undefined)applyBody(event.request.postData);
       else if(event.request.hasPostData) {
         try {const data=await this.api.command(tabId,'Network.getRequestPostData',{requestId:key}) as {postData?:string};if(current() && data.postData!==undefined)applyBody(data.postData);}
-        catch {if(current())entry.bodyNote='Request body unavailable or above the capture limit.';}
+        catch {if(current())entry.bodyNote=entry.requestBodyNote='Request body unavailable or above the capture limit.';}
       }
       return;
     }

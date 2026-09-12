@@ -13,6 +13,8 @@ export interface RequestEntry {
   requestHeaders: Record<string,string>;
   responseHeaders: Record<string,string>;
   requestBody?: string;
+  editableBody?: string;
+  requestBodyNote?: string;
   responseBody?: string;
   bodyNote?: string;
   error?: string;
@@ -59,6 +61,17 @@ export function bodyPreview(body:string,mime=''):{text?:string;note?:string} {
   }
   if(new TextEncoder().encode(text).length>MAX_BODY_BYTES)return {note:'Formatted body exceeds the 64 KB preview limit.'};
   return {text};
+}
+// Keep form encoding and duplicate keys intact for editing, while applying the same redaction.
+export function editableBody(body:string,mime=''):string|undefined {
+  const preview=bodyPreview(body,mime);
+  if(preview.text===undefined)return;
+  if(/x-www-form-urlencoded/i.test(mime)) {
+    const params=new URLSearchParams();
+    for(const [key,value] of new URLSearchParams(body))params.append(key,secret.test(key)?'[hidden]':value);
+    return params.toString();
+  }
+  return preview.text;
 }
 export function requestSummary(entry:RequestEntry):string {
   if(entry.state==='failed')return 'Network error';

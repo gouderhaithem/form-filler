@@ -6,7 +6,7 @@
 <p align="center">Fill website forms with fresh, fictional test data in one toolbar click.</p>
 <p align="center">
   <a href="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml"><img src="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml/badge.svg" alt="Build and tests" /></a>
-  <img src="https://img.shields.io/badge/version-0.9.0-5370ce" alt="Version 0.7.0" />
+  <img src="https://img.shields.io/badge/version-0.10.0-5370ce" alt="Version 0.10.0" />
   <img src="https://img.shields.io/badge/Chrome_%26_Edge-Manifest_V3-527b66" alt="Chrome and Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/TypeScript-React-3178c6" alt="TypeScript and React" />
 </p>
@@ -96,7 +96,20 @@ Recording is off by default. Chrome requires the **`debugger` permission** for r
 - Known credential headers and named JSON/form fields are hidden. Other text or HTML can contain submitted information. Review the displayed data before copying it.
 - HTTP success does not guarantee application success. Read the response for validation errors.
 
-This first version captures and inspects requests. Editing and resending requests is a later step.
+### Edit and resend a request
+
+Select a captured request → **Edit & resend**. Change the method, URL, **Params**, **Headers**, or **Body**, then click **Send**. A send makes a real request; it can create or change server data. Chrome asks for access to the destination host if needed. Recording can be stopped while you edit and send.
+
+<img src="docs/images/request-editor.png" width="420" alt="Formly request editor with an editable PATCH endpoint and JSON body, Send button, and original versus resent response status" />
+
+The editor shows the new response, status, duration, and headers alongside the original status. Expand **Original response** to compare bodies. The latest 10 resend results include a redacted snapshot of what you sent. Closing the editor, leaving Requests, or clearing history discards the draft and results; nothing is saved to disk or sent to Gemini.
+
+- Text, JSON, and URL-encoded bodies up to 64 KB are supported. GET and HEAD send no body. Multipart uploads are not supported.
+- Hidden credentials are not recovered. Re-enter required credentials; unresolved `[hidden]` values block sending. Browser-managed headers are omitted from the draft.
+- Requests run from the extension using Fetch, so browser headers and authentication can differ from the website. Cookies are off by default; enable **Include browser cookies** if needed. Chrome’s cookie rules still apply.
+- Redirects stop for review instead of being followed automatically. Chrome may hide a redirect’s status and headers. Requests time out after 20 seconds; Cancel stops waiting, but the server may already have received the request. No automatic retries.
+
+The destination access uses Chrome’s existing optional host permissions. See [Chrome’s network request documentation](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests) and [runtime permissions API](https://developer.chrome.com/docs/extensions/reference/api/permissions).
 
 ### Optional Gemini setup
 
@@ -118,7 +131,7 @@ A six-slide product walkthrough covers the filling workflow, supported fields, o
 - Gemini is optional. Its prompt contains field metadata, including labels and placeholders, plus the selected language. Entered form values, page URLs, and whole-page HTML are excluded. Labels can still contain website-specific information.
 - Your Gemini key stays in local extension storage, which is **not encrypted**, and is sent to Google for API authentication. No shared key is bundled.
 - Formly fills the **top-level document**. Frames, shadow DOM, rich-text editors, and custom widgets need additional adapters.
-- File uploads, hidden/disabled/read-only controls, and detected consent, payment, and one-time-code fields are skipped. Formly never submits forms.
+- File uploads, hidden/disabled/read-only controls, and detected consent, payment, and one-time-code fields are skipped. Filling never submits forms automatically. The request editor sends only when you click Send.
 - Generated data is fictional. Finite sample pools can repeat, and website-specific validation may reject values. Address and phone regions do not necessarily match the selected language.
 
 The extension uses `activeTab`, `scripting`, `storage`, and `alarms`, plus `sidePanel` and `contextMenus` for the page companion. The `debugger` permission supports opt-in request recording. Automatic Gemini preparation requests optional HTTP/HTTPS website access. [Full privacy and permissions details →](docs/USER_GUIDE.md#privacy--permissions)
@@ -145,6 +158,7 @@ Run `npm run build` before the browser tests. CI runs the build and both test su
 | `src/background.ts` | Toolbar action, Gemini preparation, and session cache |
 | `src/gemini.ts` | Provider requests, response validation, and cache configuration |
 | `src/RequestsPanel.tsx`, `src/network-recorder.ts` | Request inspector and bounded network capture |
+| `src/RequestEditor.tsx`, `src/request-replay.ts` | Editable requests, explicit resends, and response comparison |
 | `src/sidepanel.tsx`, `src/panel-page.ts` | Side panel interface, field highlighting, and undo |
 | `src/main.tsx` | Options interface and development preview |
 | `src/welcome.tsx` | First-install guide and interactive example |

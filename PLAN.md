@@ -100,3 +100,12 @@ Migrate older saved settings to replacement and unknown-field filling. Generate 
 - Bound memory and body previews, hide known credential fields, and avoid persistence or Gemini transmission.
 - Validate actual network traffic against a local HTTP server, including redirects, validation errors, network failures, limits, and recording lifecycle.
 - Leave editing and resending requests for a follow-up change.
+
+## v0.10 edit and resend
+
+- Add an editor to captured requests for URL, method, query parameters, headers, and text/JSON/form bodies.
+- Send explicitly from the extension with per-destination optional host access and opt-in cookies.
+- Preserve originals and show bounded in-memory resend history, request snapshots, and response comparison.
+- Stop redirects for review; support cancellation and a 20-second timeout, without retries.
+- Validate drafts, preserve form encoding, and keep redaction in captured and resent snapshots.
+- Ship as a separate commit after the request inspector so this feature can be reverted independently.

@@ -61,7 +61,7 @@ function Welcome() {
           <a href="./index.html#cache"><Clock3 size={22}/><h3>Set the pace of your cache</h3><p>Keep suggestions for 1–60 minutes, or clear them whenever you like. Five minutes is the starting point.</p><span>Manage your cache <ArrowUpRight size={16}/></span></a>
         </div>
       </section>
-      <aside className="welcome-bottom"><div><ShieldCheck size={24}/><p><strong>You stay in control.</strong><span>Local generation works offline. Gemini shares field descriptions with Google only when you enable it. Forms are never submitted.</span></p></div><a className="welcome-primary" href="./index.html">Make it yours <ArrowRight size={17}/></a></aside>
+      <aside className="welcome-bottom"><div><ShieldCheck size={24}/><p><strong>You stay in control.</strong><span>Local generation works offline. Gemini shares field descriptions with Google only when you enable it. Filling never submits forms automatically.</span></p></div><a className="welcome-primary" href="./index.html">Make it yours <ArrowRight size={17}/></a></aside>
     </main>
     <footer className="welcome-footer"><span>Made for the work between “build” and “ship”.</span><span>Formly · Chrome & Edge</span></footer>
   </div>;

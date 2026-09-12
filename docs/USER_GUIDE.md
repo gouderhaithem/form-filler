@@ -75,7 +75,23 @@ Captures stay in service-worker memory, with no persistence, browser sync, or Ge
 
 Redirects appear as separate rows. Network failures show the browser error. An HTTP 2xx status does not prove that the application accepted the form: inspect its response for validation errors. Requests are not automatically correlated to a particular form submission.
 
-Opening DevTools, another debugger, or canceling Chrome’s debugging notice can interrupt recording. Start again when the tab is available. This initial version does not edit or resend requests.
+Opening DevTools, another debugger, or canceling Chrome’s debugging notice can interrupt recording. Start again when the tab is available.
+
+## Edit and resend
+
+1. Select a completed capture and click **Edit & resend**.
+2. Edit the **Method** and **Request URL**. Use **Params** for query parameters, **Headers** for request headers, and **Body** for JSON, text, or URL-encoded form data.
+3. Replace or remove any `[hidden]` values. Hidden credential headers and browser-managed headers are excluded from the draft. Add your own Authorization header if the API needs one.
+4. Click **Send** and grant destination website access when Chrome asks. This makes a real request, even if recording is stopped.
+5. Inspect **New response**, status, duration, and **Response headers**. Expand **Sent request** and **Original response** to compare. Use **Resend history** to review the last 10 attempts.
+
+The original capture stays unchanged. Drafts and resend results stay only in the open editor. Closing it, leaving Requests, or clearing history discards them. Entered credentials are kept in the draft while editing; known credential fields in result snapshots are hidden. Nothing is sent to Gemini or saved in extension storage.
+
+Cookies are omitted by default. **Include browser cookies for this destination** opts into cookies subject to Chrome’s cookie rules. The request comes from Formly, so the website’s headers, cookie behavior, and login state may differ. Forbidden headers such as Cookie, Host, Origin, and Content-Length cannot be manually overridden.
+
+GET and HEAD omit the draft body. JSON is validated when Content-Type is JSON. Bodies and response previews are limited to 64 KB; binary responses and multipart uploads are unsupported. If the captured body was unavailable, enter a replacement before sending.
+
+Redirects are stopped rather than followed automatically; Chrome hides some redirect details. Enter the destination URL to send there. Requests time out after 20 seconds and are never automatically retried. **Cancel** stops waiting; it does not undo a request the server already received. HTTP 2xx can still contain an application error, so read the response.
 
 ## Gemini (optional)
 
