@@ -6,7 +6,7 @@ export default defineConfig({
   build: {
     modulePreload: false,
     rollupOptions: {
-      input: { index: 'index.html', welcome: 'welcome.html', demo: 'demo.html', background: 'src/background.ts' },
+      input: { index: 'index.html', welcome: 'welcome.html', sidepanel: 'sidepanel.html', demo: 'demo.html', background: 'src/background.ts' },
       output: { entryFileNames: chunk => chunk.name === 'background' ? 'background.js' : 'assets/[name]-[hash].js' },
     },
   },

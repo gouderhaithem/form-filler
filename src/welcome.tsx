@@ -50,7 +50,7 @@ function Welcome() {
         <ol className="steps">
           <li><div className="step-top"><Pin size={21}/><span>01</span></div><h3>Pin your sidekick</h3><p>Open the browser’s Extensions menu and pin Formly to your toolbar.</p></li>
           <li><div className="step-top"><Globe2 size={21}/><span>02</span></div><h3>Find a form</h3><p>Open a website you’re testing. Names, addresses, dropdowns — bring them on.</p></li>
-          <li><div className="step-top"><MousePointer2 size={21}/><span>03</span></div><h3>Click. Filled.</h3><p>Click the Formly icon. Click again for fresh data. You decide when to submit.</p></li>
+          <li><div className="step-top"><MousePointer2 size={21}/><span>03</span></div><h3>Click. Filled.</h3><p>Click the Formly icon. Click again for fresh data. Right-click → Open Formly panel to inspect fields and undo. You decide when to submit.</p></li>
         </ol>
       </section>
       <section className="make-yours" aria-labelledby="yours-title">

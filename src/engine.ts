@@ -1,10 +1,11 @@
+import type { PanelPageState, FieldReport, Control, ControlSnapshot } from './panel-types';
 import type { CustomField, Values, Exclusions, Identity } from './data';
 import type { FieldSamples } from './samples';
 
 export interface UnknownField { signature?:string; id:string; label:string; name:string; placeholder:string; type:string; min:string; max:string; step:string; minLength:number; maxLength:number }
 export interface SuggestedField { signature:string; values:string[] }
-export interface FillRequest { samples?:FieldSamples; identities?:Identity[]; exclusions?:Exclusions; mode?:'scan'; suggestionsExpireAt?:number; suggestions?:Record<string,SuggestedField>; expectedDocument?:string; values: Values; custom: CustomField[]; overwrite: boolean; fillUnknown: boolean; passwords: boolean }
-export interface FillResult { unknown?:UnknownField[]; documentId?:string; origin?:string; used?:Record<string,string>; stale?:boolean; filled: number; preserved: number; unmatched: number; invalid: number }
+export interface FillRequest { samples?:FieldSamples; identities?:Identity[]; exclusions?:Exclusions; mode?:'scan'|'inspect'; suggestionsExpireAt?:number; suggestions?:Record<string,SuggestedField>; expectedDocument?:string; values: Values; custom: CustomField[]; overwrite: boolean; fillUnknown: boolean; passwords: boolean }
+export interface FillResult { fields?:FieldReport[]; canUndo?:boolean; unknown?:UnknownField[]; documentId?:string; origin?:string; used?:Record<string,string>; stale?:boolean; filled: number; preserved: number; unmatched: number; invalid: number }
 
 // This function is serialized by chrome.scripting; keep all runtime dependencies inside it.
 export function fillPage(request: FillRequest): FillResult {
@@ -36,7 +37,7 @@ export function fillPage(request: FillRequest): FillResult {
     website: ['website', 'web site', 'url', 'site web', 'الموقع الالكتروني'],
   };
   const autocomplete: Record<string, keyof Values> = { username: 'username', name: 'fullName', 'given-name': 'firstName', 'family-name': 'lastName', email: 'email', tel: 'phone', organization: 'company', 'organization-title': 'jobTitle', 'street-address': 'address', 'address-line1': 'address', 'address-level2': 'city', 'address-level1': 'state', 'postal-code': 'postalCode', country: 'country', 'country-name': 'country', url: 'website', 'additional-name': 'middleName', bday: 'birthDate', sex: 'gender', 'address-line2': 'address2', 'new-password': 'password', 'current-password': 'password' };
-  const pageState = globalThis as typeof globalThis & { __formlyDocumentId?:string };
+  const pageState = globalThis as typeof globalThis & { __formlyDocumentId?:string; __formlyPanel?:PanelPageState };
   pageState.__formlyDocumentId ||= crypto.randomUUID();
   const result: FillResult = { filled: 0, preserved: 0, unmatched: 0, invalid: 0, documentId:pageState.__formlyDocumentId, origin:location.origin };
   if (request.expectedDocument && request.expectedDocument !== result.documentId) return {...result,stale:true};
@@ -101,6 +102,51 @@ export function fillPage(request: FillRequest): FillResult {
   };
   const editable = (el:HTMLInputElement) => !el.disabled && !el.matches(':disabled') && !el.closest('[inert]') && !!el.getClientRects().length && getComputedStyle(el).visibility === 'visible';
   const controls = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
+  const panel:PanelPageState|undefined = request.mode==='scan' ? undefined : (pageState.__formlyPanel ||= {elements:new Map(),ids:new WeakMap(),reports:new Map(),undo:[]});
+  const snapshot = (el:Control):ControlSnapshot => ({value:el.value,...(el instanceof HTMLInputElement && ['checkbox','radio'].includes(el.type)?{checked:el.checked}:{}),...(el instanceof HTMLSelectElement?{selected:Array.from(el.options,o=>o.selected)}:{})});
+  const skipReason = (el:Control) => {
+    if(el instanceof HTMLInputElement && ['hidden','submit','button','reset','image'].includes(el.type)) return 'omit';
+    if(!el.getClientRects().length || getComputedStyle(el).visibility!=='visible') return 'omit';
+    if(el.disabled || el.matches(':disabled')) return 'Disabled field';
+    if('readOnly' in el && el.readOnly) return 'Read-only field';
+    if(el.closest('[inert]')) return 'Inactive section';
+    if(shouldExclude(el)) return 'Excluded by your settings';
+    if(el instanceof HTMLInputElement && el.type==='file') return 'File uploads are not supported';
+    const ac=el.autocomplete || '';
+    const signals=fieldSignals(el);
+    if(ac.split(/\s+/).some(token=>token.startsWith('cc-') || token==='one-time-code') || signals.some(signal=>excluded.test(signal))) return 'Protected payment or verification field';
+    if(!request.passwords && (el.type==='password' || ac.includes('password') || signals.some(signal=>/password|mot de passe|كلمة المرور/u.test(signal)))) return 'Password filling disabled';
+    if(el instanceof HTMLInputElement && ['radio','checkbox'].includes(el.type)) {
+      if(signals.some(signal=>consent.test(signal)) || consent.test(normalize(el.closest('fieldset')?.querySelector('legend')?.textContent || ''))) return 'Consent field stays untouched';
+      if(!request.fillUnknown) return 'Unknown-field filling disabled';
+    }
+    return '';
+  };
+  const reportFor = (el:Control):FieldReport => {
+    let id=panel!.ids.get(el);
+    if(!id){id=crypto.randomUUID();panel!.ids.set(el,id);}
+    panel!.elements.set(id,el);
+    const label=(Array.from(el.labels || [],l=>l.textContent || '').join(' ') || el.getAttribute('aria-label') || (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id=>document.getElementById(id)?.textContent || '').join(' ').trim() || el.getAttribute('placeholder') || el.name || el.id || el.type || 'Unnamed field').trim().slice(0,160);
+    const reason=skipReason(el);
+    return {id,label,status:reason?'skipped':'ready',reason:reason || 'Ready to fill',editable:!reason || reason==='Excluded by your settings'};
+  };
+  const finalizeReport = () => {
+    if(!panel) return;
+    const live=new Set(controls);
+    for(const [id,el] of panel.elements) if(!live.has(el)){panel.elements.delete(id);panel.reports.delete(el);}
+    result.fields=Array.from(controls).filter(el=>skipReason(el)!=='omit').map(el=>{
+      const fresh=reportFor(el), previous=panel.reports.get(el);
+      if(fresh.status==='skipped' || !previous)return fresh;
+      if(previous.reason==='Excluded by your settings' || (previous.reason==='No matching generator' && request.fillUnknown))return fresh;
+      if(previous.reason==='Existing value preserved' && request.overwrite)return fresh;
+      return {...previous,label:fresh.label,editable:fresh.editable};
+    });
+    result.canUndo=panel.undo.some(entry=>entry.element.isConnected);
+  };
+  if(request.mode==='inspect'){finalizeReport();return result;}
+  const touched=new Set<Control>();
+  const before=panel?new Map(Array.from(controls,el=>[el,snapshot(el)])):undefined;
+  if(panel){panel.reports.clear();panel.undo=[];}
   const identityKeys = ['firstName','middleName','lastName','fullName','username','email'] as const;
   let values = request.values;
   if(request.mode!=='scan' && request.overwrite && (request.identities?.length || request.samples)) {
@@ -122,6 +168,8 @@ export function fillPage(request: FillRequest): FillResult {
     }
   }
   for (const [controlIndex,el] of Array.from(controls).entries()) {
+    const counts={filled:result.filled,preserved:result.preserved,unmatched:result.unmatched,invalid:result.invalid};
+    try {
     if (el.disabled || el.matches(':disabled') || ('readOnly' in el && el.readOnly) || el.closest('[inert]') || !el.getClientRects().length || getComputedStyle(el).visibility !== 'visible') continue;
     if (shouldExclude(el)) continue;
     if (el instanceof HTMLInputElement && ['hidden', 'file', 'submit', 'button', 'reset', 'image'].includes(el.type)) continue;
@@ -151,6 +199,7 @@ export function fillPage(request: FillRequest): FillResult {
         if (!choices.length) continue;
         target = choices[random(choices.length)]; checked = true;
       } else if (el.checked && !request.overwrite) { result.preserved++; continue; }
+      for(const member of controls) if(member===target || (target.type==='radio' && target.name && member instanceof HTMLInputElement && member.type==='radio' && member.form===target.form && member.name===target.name)) touched.add(member);
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set?.call(target, checked);
       target.dispatchEvent(new Event('input', { bubbles: true }));
       target.dispatchEvent(new Event('change', { bubbles: true }));
@@ -160,12 +209,14 @@ export function fillPage(request: FillRequest): FillResult {
     let genericText = false;
     let literalCustom = false;
     let matchedKey:keyof Values | undefined;
-    if (autocomplete[ac]) {matchedKey=autocomplete[ac];value = values[matchedKey];}
+    const targeted=request.custom.find(c=>c.selector && (!c.site || c.site===location.hostname) && (()=>{try{return el.matches(c.selector!);}catch{return false;}})());
+    if(targeted){value=targeted.value;literalCustom=true;}
+    if (value===undefined && autocomplete[ac]) {matchedKey=autocomplete[ac];value = values[matchedKey];}
     if (value === undefined) {
       // Exact matches outrank longer labels containing a known phrase.
       for (const exact of [true, false]) {
         for (const signal of signals) {
-          const custom = request.custom.find(c => c.label.trim() && normalize(c.label) === signal);
+          const custom = request.custom.find(c => !c.selector && c.label.trim() && normalize(c.label) === signal);
           if (custom) {value=custom.value;literalCustom=true;break;}
           const candidates = Object.entries(aliases).flatMap(([key, names]) => names.map(name => ({ key, name: normalize(name) })))
             .filter(c => exact ? signal === c.name : c.name.split(' ').length > 1 && ` ${signal} `.includes(` ${c.name} `))
@@ -289,10 +340,34 @@ export function fillPage(request: FillRequest): FillResult {
       if (probe.value !== value || (el.maxLength >= 0 && value.length > el.maxLength) || (!request.fillUnknown && !probe.checkValidity())) { result.invalid++; continue; }
     }
     const prototype = el instanceof HTMLInputElement ? HTMLInputElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLSelectElement.prototype;
+    touched.add(el);
     Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(el, value);
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
     if (el.value === value) {result.filled++;} else result.invalid++;
+    } finally {
+      if(panel) {
+        const report=reportFor(el);
+        if(report.status==='ready') {
+          if(result.invalid>counts.invalid){report.status='incompatible';report.reason='The generated value does not fit this control';}
+          else if(result.filled>counts.filled){report.status='filled';report.reason='Filled with test data';}
+          else {report.status='skipped';report.reason=result.preserved>counts.preserved?'Existing value preserved':result.unmatched>counts.unmatched?'No matching generator':'Radio group handled separately';}
+        }
+        panel.reports.set(el,report);
+      }
+    }
+  }
+  if(panel && before) {
+    for(const el of controls) {
+      const original=before.get(el)!,after=snapshot(el);
+      if(touched.has(el) && JSON.stringify(original)!==JSON.stringify(after)) panel.undo.push({element:el,before:original,after});
+      const report=panel.reports.get(el);
+      if(report && el instanceof HTMLInputElement && el.type==='radio' && touched.has(el)){report.status=el.checked?'filled':'skipped';report.reason=el.checked?'Selected in this group':'Another option selected in this group';}
+      if(report?.status==='filled') {
+        report.value=(el.type==='password' || el.autocomplete?.includes('password') || fieldSignals(el).some(signal=>/password|mot de passe|كلمة المرور/u.test(signal)))?'Password generated':('checked' in after?after.checked?'Selected':'Not selected':el.value.slice(0,180));
+      }
+    }
+    finalizeReport();
   }
   return result;
 }

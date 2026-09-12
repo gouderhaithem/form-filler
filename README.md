@@ -6,7 +6,7 @@
 <p align="center">Fill website forms with fresh, fictional test data in one toolbar click.</p>
 <p align="center">
   <a href="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml"><img src="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml/badge.svg" alt="Build and tests" /></a>
-  <img src="https://img.shields.io/badge/version-0.7.0-5370ce" alt="Version 0.7.0" />
+  <img src="https://img.shields.io/badge/version-0.8.0-5370ce" alt="Version 0.7.0" />
   <img src="https://img.shields.io/badge/Chrome_%26_Edge-Manifest_V3-527b66" alt="Chrome and Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/TypeScript-React-3178c6" alt="TypeScript and React" />
 </p>
@@ -27,6 +27,8 @@ Formly is a browser extension for developers and QA testers who repeatedly fill 
 
 | | What you can do |
 | --- | --- |
+| **Side panel** | Inspect filled/skipped fields beside the website, highlight a control, and save a custom value or exclusion. |
+| **Undo last fill** | Restore the previous values while preserving fields you edited afterward. |
 | **One-click filling** | Fill the active page directly from the toolbar and see the filled-field count on the icon. |
 | **42 field categories** | Generate fictional identities, contact details, work information, addresses, numbers, dates, and text. |
 | **English, French & Arabic** | Recognize labels in all three languages and choose a language for generated data. |
@@ -64,6 +66,21 @@ Open [the local preview](http://127.0.0.1:5187/), choose **Generator**, and clic
 
 ![Formly generator and a filled multilingual demo form](docs/images/generator.png)
 
+### Open the side panel
+
+Right-click the Formly toolbar icon and choose **Open Formly panel**, or press **Alt + Shift + F**. The panel opens beside the current website. A normal toolbar click continues to fill the page immediately.
+
+- Review each field's filled/skipped status and reason. Hidden inputs are omitted and password values are masked.
+- Select a field to highlight it on the page, save a custom test value for that field on that hostname, or exclude it.
+- Click **Fill this page / Fill again** to apply your settings, or **Undo last fill** to restore the last set of changes.
+- Switch tabs or reload a page and the panel refreshes its field list. A new website may need a toolbar click or reopening the panel from the icon's menu to grant access.
+
+Undo keeps one fill per document, preserves later manual edits, and resets when the document reloads. Previous values stay in the page's isolated extension context and never go to Gemini. Undo restores form controls, not other effects a website may trigger when a value changes.
+
+Requires Chrome 116+ or an Edge version supporting the Side Panel API. Change a conflicting shortcut at `chrome://extensions/shortcuts` or `edge://extensions/shortcuts`.
+
+<img src="docs/images/sidepanel.png" width="420" alt="Formly native side panel showing individual field results and fill controls" />
+
 ### Optional Gemini setup
 
 In the installed extension, open **Options → Gemini**, enter your own API key, and click **Test key**. Choose an available model, enable **Use Gemini for unknown fields**, save, and accept the browser's website-access request.
@@ -87,7 +104,7 @@ A six-slide product walkthrough covers the filling workflow, supported fields, o
 - File uploads, hidden/disabled/read-only controls, and detected consent, payment, and one-time-code fields are skipped. Formly never submits forms.
 - Generated data is fictional. Finite sample pools can repeat, and website-specific validation may reject values. Address and phone regions do not necessarily match the selected language.
 
-The extension uses `activeTab`, `scripting`, `storage`, and `alarms`. Automatic Gemini preparation requests optional HTTP/HTTPS website access. [Full privacy and permissions details →](docs/USER_GUIDE.md#privacy--permissions)
+The extension uses `activeTab`, `scripting`, `storage`, and `alarms`, plus `sidePanel` and `contextMenus` for the page companion. Automatic Gemini preparation requests optional HTTP/HTTPS website access. [Full privacy and permissions details →](docs/USER_GUIDE.md#privacy--permissions)
 
 ## Development
 
@@ -110,6 +127,7 @@ Run `npm run build` before the browser tests. CI runs the build and both test su
 | `src/data.ts`, `src/samples.ts` | Fictional values and multilingual samples |
 | `src/background.ts` | Toolbar action, Gemini preparation, and session cache |
 | `src/gemini.ts` | Provider requests, response validation, and cache configuration |
+| `src/sidepanel.tsx`, `src/panel-page.ts` | Side panel interface, field highlighting, and undo |
 | `src/main.tsx` | Options interface and development preview |
 | `src/welcome.tsx` | First-install guide and interactive example |
 | `public/manifest.json` | Extension entry points and permissions |

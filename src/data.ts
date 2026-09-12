@@ -13,7 +13,7 @@ export type FieldKey = typeof fields[number][0];
 export type Values = Record<FieldKey,string>;
 export type Identity = Pick<Values,'firstName'|'middleName'|'lastName'|'fullName'|'username'|'email'>;
 export type Locale = 'en' | 'fr' | 'ar';
-export interface CustomField { id:string; label:string; value:string }
+export interface CustomField { id:string; label:string; value:string; selector?:string; site?:string }
 export interface ExclusionRule { id:string; match:'label'|'selector'; value:string; site:string }
 export interface Exclusions { skipSearch:boolean; skipHeader:boolean; rules:ExclusionRule[] }
 export const defaultExclusions:Exclusions={skipSearch:true,skipHeader:true,rules:[]};

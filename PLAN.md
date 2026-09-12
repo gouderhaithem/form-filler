@@ -83,3 +83,11 @@ Migrate older saved settings to replacement and unknown-field filling. Generate 
 - Insert explicit custom values without decorations; fixed custom values may repeat. Skip incompatible native values instead of replacing them.
 - Reject UUID and hexadecimal ID fragments from Gemini suggestions and cached values.
 - Verify every generated category, repeated payloads, password confirmation, length constraints, custom values, and real browser filling.
+
+## v0.8 native side panel
+
+- Keep toolbar clicks as direct fill actions. Add an action context-menu entry and Alt+Shift+F command to open a native side panel.
+- Inspect native controls, show filled/skipped details, highlight a selected control, and save targeted custom values or exclusions.
+- Store one undo snapshot in the document’s isolated extension context, preserving later edits and rejecting stale document/field references.
+- Refresh the panel on tab changes and navigation without adding permanent website access.
+- Validate native panel interactions in Chromium, including undo, rules, exclusions, tab changes, and narrow layouts.

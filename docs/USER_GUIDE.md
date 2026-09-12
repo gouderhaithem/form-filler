@@ -53,6 +53,18 @@ Right-click the toolbar icon → **Options** to configure Formly. Gemini is the 
 
 The toolbar badge shows the number of filled fields. Hover over the icon for details. A `!` badge means filling failed; browser internal pages and extension stores restrict extension access.
 
+## Side panel
+
+Right-click the toolbar icon → **Open Formly panel**, or press **Alt + Shift + F**. The panel stays beside the website and follows the active tab. Ordinary toolbar clicks still fill immediately.
+
+Use the field list to inspect filled/skipped results, highlight a control, save a custom value, or exclude a field. Panel custom rules target a CSS selector on the exact hostname and take priority over autocomplete. You can change their values or delete them in **Options → Custom fields**. If the website changes its markup, recreate the rule. Panel exclusions appear in **Options → Excluded fields**.
+
+**Undo last fill** restores the last fill for the current document and preserves controls changed since then. Reloading clears undo. Original values stay in the isolated extension context of the page, never in Gemini prompts or extension storage. Undo cannot reverse other website actions triggered by change events.
+
+The list refreshes after tab changes and periodically while open. On a new website, click Formly or reopen its panel from the icon’s menu if access is needed. Restricted browser pages, frames, and custom widgets retain the existing limitations.
+
+The panel needs Chrome 116+ or a compatible Edge version. Customize the shortcut in your browser’s extension shortcuts page.
+
 ## Gemini (optional)
 
 Local generation works without an account or API key. To add contextual suggestions:
@@ -98,7 +110,7 @@ Open the settings button at the top of Options to control:
 
 ### Custom fields
 
-Add a label and a test value, for example `Project code` → `PRJ-001`. Rules match exact normalized labels, accessible names, names, IDs, or placeholders. Standard autocomplete attributes take priority. Custom values are inserted exactly as entered, without added prefixes or suffixes. A fixed custom value stays the same across clicks; if it cannot fit the control, that field is reported as incompatible.
+Add a label and a test value, for example `Project code` → `PRJ-001`. Rules match exact normalized labels, accessible names, names, IDs, or placeholders. Standard autocomplete attributes take priority over label rules. Rules created from the side panel target one field on an exact hostname and take priority over autocomplete. Custom values are inserted exactly as entered, without added prefixes or suffixes. A fixed custom value stays the same across clicks; if it cannot fit the control, that field is reported as incompatible.
 
 ### Excluded fields
 
@@ -147,7 +159,7 @@ Formly works in the active page’s **top-level document**. Frames, shadow DOM, 
 
 Labels and placeholders are sent as written, so they can contain information specific to the website. **Remove saved key** disables Gemini and clears its cache. No shared API key is bundled, and the development preview does not store Gemini credentials.
 
-Formly requests `activeTab` and `scripting` to fill the clicked page, `storage` for preferences/cache, and `alarms` for cache cleanup. Access to Google’s API endpoint supports Gemini requests. Broad HTTP/HTTPS website access is optional and requested when you enable Gemini’s automatic preparation.
+Formly requests `activeTab` and `scripting` to fill the clicked page, `storage` for preferences/cache, and `alarms` for cache cleanup. `sidePanel` and `contextMenus` provide the optional page companion. Access to Google’s API endpoint supports Gemini requests. Broad HTTP/HTTPS website access is optional and requested when you enable Gemini’s automatic preparation.
 
 ## Development
 
