@@ -1,0 +1,16 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.backups/
+
+# Local credentials and private artifact builds
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.presentation-build/
+.codex-finalizer/
+.DS_Store

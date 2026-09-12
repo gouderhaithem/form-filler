@@ -1,0 +1,147 @@
+import { test, expect, chromium } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+
+test('one click fills a multilingual form and settings persist',async({page})=>{
+  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/');
+  await page.getByRole('button',{name:'Generator',exact:true}).click();
+  const form=page.frameLocator('#demo-form');
+  await expect(form.locator('#first')).toBeVisible();
+  await page.getByRole('button',{name:'Generate & fill'}).click();
+  await expect(form.locator('#first')).not.toHaveValue('');
+  await expect(form.locator('#last')).not.toHaveValue('');
+  await expect(form.locator('#email')).toHaveValue(/@example\.com$/);
+  await expect(form.locator('#country')).not.toHaveValue('');
+  await expect(form.locator('#terms')).not.toBeChecked();
+  await expect(form.locator('#pwd')).toHaveValue('');
+  await expect(page.getByRole('status')).toContainText('fields filled');
+  await form.locator('#first').fill('Keep this');
+  await page.getByRole('button',{name:'Generate & fill'}).click();
+  await expect(form.locator('#first')).not.toHaveValue('Keep this');
+  await page.getByRole('button',{name:'Custom fields'}).click();
+  await page.getByRole('button',{name:'Add custom field'}).click();
+  await page.getByLabel('Field label',{exact:true}).fill('Project code');
+  await page.getByLabel('Test value',{exact:true}).fill('PRJ-001');
+  await page.getByRole('button',{name:'Generate & fill'}).click();
+  await expect(form.locator('#project-code')).toHaveValue('PRJ-001');
+  await page.getByRole('button',{name:'Toggle settings'}).click();
+  await page.getByLabel('Fill unknown fields').check();
+  await page.getByLabel('Generate test passwords').check();
+  await page.getByRole('button',{name:'Generate & fill'}).click();
+  await expect(form.locator('#pwd')).not.toHaveValue('');
+  await expect(form.locator('#project-code')).toHaveValue('PRJ-001');
+  await expect(form.locator('#appointment')).not.toHaveValue('');
+  await expect(form.locator('input[name=contact]:checked')).toHaveCount(1);
+  await expect(form.locator('#terms')).not.toBeChecked();
+  await page.reload();
+  await page.getByRole('button',{name:'Toggle settings'}).click();
+  await expect(page.getByLabel('Fill unknown fields')).toBeChecked();
+  await page.getByRole('button',{name:/Custom fields/}).click();
+  await expect(page.getByLabel('Test value',{exact:true})).toHaveValue('PRJ-001');
+  expect(errors).toEqual([]);
+});
+
+test('desktop and mobile layouts fit and generated language changes',async({page})=>{
+  await page.setViewportSize({width:1280,height:1050});await page.goto('/');
+  await expect(page.getByRole('button',{name:'Generate & fill'})).toBeEnabled();
+  await page.screenshot({path:'test-results/desktop.png',fullPage:true});
+  await page.getByRole('button',{name:'Generator',exact:true}).click();
+  await page.getByLabel('Data language').selectOption('ar');
+  await expect(page.locator('.identity strong')).toHaveText(/[\u0600-\u06ff]/);
+  await page.setViewportSize({width:360,height:800});
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/mobile.png',fullPage:true});
+});
+
+test('toolbar action fills the target website directly and options persist',async()=>{
+  const extensionPath=resolve('dist');
+  const profile=await mkdtemp(resolve(tmpdir(),'formly-test-'));
+  const context=await chromium.launchPersistentContext(profile,{channel:'chromium',headless:true,args:['--enable-unsafe-extension-debugging',`--disable-extensions-except=${extensionPath}`,`--load-extension=${extensionPath}`]});
+  try {
+    const id=createHash('sha256').update(extensionPath).digest('hex').slice(0,32).replace(/[0-9a-f]/g,c=>String.fromCharCode(97+parseInt(c,16)));
+    const worker=context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
+    const page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+    await worker.evaluate(()=>chrome.storage.local.set({settings:{locale:'en',overwrite:false,fillUnknown:false,passwords:false,custom:[]}}));
+    await page.goto(`chrome-extension://${id}/index.html`);
+    await expect(page.getByRole('button',{name:'Generate & fill'})).toHaveCount(0);
+    await expect(page.locator('.demo')).toHaveCount(0);
+    await page.getByRole('button',{name:'Toggle settings'}).click();
+    await expect(page.getByLabel('Fill unknown fields')).toBeEnabled();
+    await page.getByLabel('Fill unknown fields').check();
+    await page.reload();await page.getByRole('button',{name:'Toggle settings'}).click();
+    await expect(page.getByLabel('Fill unknown fields')).toBeChecked();
+    const website=await context.newPage();
+    await website.goto('http://127.0.0.1:5188/demo.html');
+    await website.evaluate(()=>{
+      const header=document.createElement('header');
+      header.innerHTML='<input id="header-search" type="search" value="Find something"><select id="header-language"><option value="en">English</option><option value="fr">French</option></select>';
+      document.body.prepend(header);
+    });
+    const actionCdp=await context.browser()!.newBrowserCDPSession();
+    const {targetInfos}=await actionCdp.send('Target.getTargets',{filter:[{type:'tab',exclude:false},{exclude:true}]});
+    const targetInfo=targetInfos.find(t=>t.url===website.url());
+    if (!targetInfo) throw new Error(JSON.stringify(targetInfos));
+    const pageCount=context.pages().length;
+    await actionCdp.send('Extensions.triggerAction',{id,targetId:targetInfo.targetId});
+    await expect(website.locator('#first')).not.toHaveValue('');
+    await expect(website.locator('#email')).toHaveValue(/@example\.com$/);
+    await expect(website.locator('#country')).not.toHaveValue('');
+    await expect(website.locator('#project-code')).toHaveValue(/^[A-Za-z]+$/);
+    await expect(website.locator('#terms')).not.toBeChecked();
+    expect(context.pages()).toHaveLength(pageCount);
+    const tabId=await worker.evaluate(async()=>{
+      const tabs=await chrome.tabs.query({});
+      return tabs.find(t=>t.url?.includes('/demo.html'))!.id!;
+    });
+    await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getBadgeText({tabId}),tabId)).toMatch(/^[1-9][0-9]*$/);
+    const snapshot=()=>website.locator('#test-form').evaluate(form=>Object.fromEntries(Array.from(form.querySelectorAll('input,textarea,select')).filter(el=>!['terms','pwd'].includes(el.id)).map(el=>[el.id,el instanceof HTMLInputElement && ['checkbox','radio'].includes(el.type)?String(el.checked):(el as HTMLInputElement).value])));
+    let before=await snapshot();
+    for(let i=0;i<3;i++) {
+      await actionCdp.send('Extensions.triggerAction',{id,targetId:targetInfo.targetId});
+      await expect(website.locator('#email')).not.toHaveValue(before.email);
+      await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getBadgeText({tabId}),tabId)).toMatch(/^[1-9][0-9]*$/);
+      const after=await snapshot();
+      for(const [key,value] of Object.entries(after)) {expect(value,key).not.toBe('');expect(value,key).not.toBe(before[key]);}
+      expect(after.first).toMatch(/^[A-Za-z]+$/);expect(after.last).toMatch(/^[A-Za-z]+$/);
+      expect(after.username).toBe(`${after.first}.${after.last}`.toLowerCase());
+      expect(after.email).toBe(`${after.username}@example.com`);
+      expect(after.company).toMatch(/^[A-Za-z ]+$/);expect(after.job).toMatch(/^[A-Za-z ]+$/);
+      expect(after.address).toMatch(/^\d{1,3} [A-Za-z ]+$/);expect(after.message).toMatch(/^[A-Za-z ,.?]+$/);
+      before=after;
+      await expect(website.locator('#header-search')).toHaveValue('Find something');
+      await expect(website.locator('#header-language')).toHaveValue('en');
+    }
+    await page.getByRole('button',{name:'Excluded fields',exact:true}).click();
+    await expect(page.getByLabel('Skip search fields')).toBeChecked();
+    await expect(page.getByLabel('Skip headers and navigation')).toBeChecked();
+    await page.getByLabel('Field to exclude',{exact:true}).fill('Project code');
+    await page.getByLabel('Website (optional)',{exact:true}).fill('http://127.0.0.1:5188/demo.html');
+    await page.getByRole('button',{name:'Add exclusion',exact:true}).click();
+    await expect.poll(()=>worker.evaluate(async()=>((await chrome.storage.local.get('settings')).settings.exclusions.rules as {value:string}[]).some(rule=>rule.value==='Project code'))).toBe(true);
+    const keptProject=await website.locator('#project-code').inputValue();
+    const previousEmail=await website.locator('#email').inputValue();
+    await actionCdp.send('Extensions.triggerAction',{id,targetId:targetInfo.targetId});
+    await expect(website.locator('#email')).not.toHaveValue(previousEmail);
+    await expect(website.locator('#project-code')).toHaveValue(keptProject);
+    await page.reload();await page.getByRole('button',{name:'Excluded fields',exact:true}).click();
+    await expect(page.locator('.exclusion-rule strong')).toHaveText('Project code');
+    await expect(page.locator('.exclusion-rule small')).toContainText('127.0.0.1');
+    await page.screenshot({path:'test-results/exclusions-desktop.png',fullPage:true});
+    await page.setViewportSize({width:360,height:800});
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:'test-results/exclusions-mobile.png',fullPage:true});
+    await page.getByRole('button',{name:'Remove exclusion Project code',exact:true}).click();
+    await expect.poll(()=>worker.evaluate(async()=>(await chrome.storage.local.get('settings')).settings.exclusions.rules.length)).toBe(0);
+    await actionCdp.send('Extensions.triggerAction',{id,targetId:targetInfo.targetId});
+    await expect(website.locator('#project-code')).not.toHaveValue(keptProject);
+    await website.goto('chrome://version');
+    await actionCdp.send('Extensions.triggerAction',{id,targetId:targetInfo.targetId});
+    await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getBadgeText({tabId}),tabId)).toBe('!');
+    await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getTitle({tabId}),tabId)).toContain('restricts extensions');
+    expect(errors).toEqual([]);
+    await page.screenshot({path:'test-results/extension.png',fullPage:true});
+  } finally {await context.close();await rm(profile,{recursive:true,force:true});}
+});

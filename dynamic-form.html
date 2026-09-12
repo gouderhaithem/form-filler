@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Dynamic form fixture</title></head>
+<body>
+  <!-- Regression fixture: a form that reveals a field once it is filled, the way validation-driven
+       forms do. The Gemini batch must survive that change instead of being regenerated. -->
+  <form id="test-form">
+    <label for="project-code">Project code name</label><input id="project-code" name="projectCode">
+    <label for="why">Why are you interested?</label><textarea id="why" name="why"></textarea>
+    <div id="revealed"></div>
+  </form>
+  <script type="module" src="/src/dynamic-form.ts"></script>
+</body></html>

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Formly — Fast form filler",
+  "version": "0.7.0",
+  "description": "Click the toolbar icon to fill the current website with generated test data.",
+  "permissions": ["activeTab", "scripting", "storage", "alarms"],
+  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "action": { "default_title": "Fill this page with test data", "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" } },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "options_ui": { "page": "index.html", "open_in_tab": true }
+}
