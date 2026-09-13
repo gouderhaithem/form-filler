@@ -49,3 +49,14 @@ it('leaves recording off after attach failure without detaching someone else',as
  const {recorder,api}=setup();api.attach.mockRejectedValue(new Error('Another debugger is attached'));
  await expect(recorder.start(7,'example.com')).rejects.toThrow();expect(api.detach).not.toHaveBeenCalled();expect(recorder.state.recording).toBe(false);
 });
+it('keeps captured authentication private and binds reuse to its original origin and history lifetime',async()=>{
+ const {recorder}=setup();await recorder.start(7,'example.com');
+ await recorder.event(7,'Network.requestWillBeSent',{...request(),documentURL:'https://example.com/form'});
+ const entry=recorder.state.entries[0];expect(entry.authenticationHeaders).toEqual(['Authorization']);
+ expect(JSON.stringify(recorder.view(entry.id))).not.toContain('Bearer secret');
+ expect(recorder.replayContext(entry.id,'https://example.com/edited',true).headers.Authorization).toBe('Bearer secret');
+ expect(()=>recorder.replayContext(entry.id,'https://other.example.com/edited',true)).toThrow('different origin');
+ expect(recorder.replayContext(entry.id,'https://other.example.com/edited',false).headers).toEqual({});
+ await recorder.stop();expect(recorder.replayContext(entry.id,entry.url,true).headers.Authorization).toBe('Bearer secret');
+ recorder.clear();expect(()=>recorder.replayContext(entry.id,entry.url,true)).toThrow('no longer available');
+});

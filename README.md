@@ -6,7 +6,7 @@
 <p align="center">Fill website forms with fresh, fictional test data in one toolbar click.</p>
 <p align="center">
   <a href="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml"><img src="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml/badge.svg" alt="Build and tests" /></a>
-  <img src="https://img.shields.io/badge/version-0.10.0-5370ce" alt="Version 0.10.0" />
+  <img src="https://img.shields.io/badge/version-0.10.1-5370ce" alt="Version 0.10.1" />
   <img src="https://img.shields.io/badge/Chrome_%26_Edge-Manifest_V3-527b66" alt="Chrome and Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/TypeScript-React-3178c6" alt="TypeScript and React" />
 </p>
@@ -98,15 +98,17 @@ Recording is off by default. Chrome requires the **`debugger` permission** for r
 
 ### Edit and resend a request
 
-Select a captured request → **Edit & resend**. Change the method, URL, **Params**, **Headers**, or **Body**, then click **Send**. A send makes a real request; it can create or change server data. Chrome asks for access to the destination host if needed. Recording can be stopped while you edit and send.
+Select a captured request → **Edit & resend**. Change the method, URL, **Params**, **Headers**, or **Body**, then click **Send**. A send makes a real request; it can create or change server data. Chrome asks for access to the destination host and, in website mode, the source page if needed. Recording can be stopped while you edit and send.
 
-<img src="docs/images/request-editor.png" width="420" alt="Formly request editor with an editable PATCH endpoint and JSON body, Send button, and original versus resent response status" />
+<img src="docs/images/request-editor.png" width="420" alt="Formly request editor using the website session, captured authentication headers, and cookies with a successful authenticated response" />
 
 The editor shows the new response, status, duration, and headers alongside the original status. Expand **Original response** to compare bodies. The latest 10 resend results include a redacted snapshot of what you sent. Closing the editor, leaving Requests, or clearing history discards the draft and results; nothing is saved to disk or sent to Gemini.
 
 - Text, JSON, and URL-encoded bodies up to 64 KB are supported. GET and HEAD send no body. Multipart uploads are not supported.
-- Hidden credentials are not recovered. Re-enter required credentials; unresolved `[hidden]` values block sending. Browser-managed headers are omitted from the draft.
-- Requests run from the extension using Fetch, so browser headers and authentication can differ from the website. Cookies are off by default; enable **Include browser cookies** if needed. Chrome’s cookie rules still apply.
+- **Website session** is the default for captures with a source page. Keep the original website tab selected and on the captured page. Chrome sends its current cookies and computes Origin/Referer from that website. Page CORS rules still apply; this is a Fetch request, not an exact replay of a document navigation.
+- **Reuse captured authentication** restores captured Authorization/CSRF headers while keeping their values hidden. These values remain only in recorder memory and are discarded with that capture. They can only be reused for the original API origin (scheme, host, and port). Explicitly edited headers override captured values. Expired or rotating tokens may require a fresh recording.
+- Browser-managed headers are not manually copied. Hidden values in URL/body still need replacement; unresolved `[hidden]` values block sending.
+- **Extension** mode remains available for independent API calls. It defaults to omitting cookies and has a different Origin/Referer, so authenticated websites may reject it even when cookies are enabled. In either mode, Chrome’s cookie rules apply.
 - Redirects stop for review instead of being followed automatically. Chrome may hide a redirect’s status and headers. Requests time out after 20 seconds; Cancel stops waiting, but the server may already have received the request. No automatic retries.
 
 The destination access uses Chrome’s existing optional host permissions. See [Chrome’s network request documentation](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests) and [runtime permissions API](https://developer.chrome.com/docs/extensions/reference/api/permissions).
@@ -159,6 +161,7 @@ Run `npm run build` before the browser tests. CI runs the build and both test su
 | `src/gemini.ts` | Provider requests, response validation, and cache configuration |
 | `src/RequestsPanel.tsx`, `src/network-recorder.ts` | Request inspector and bounded network capture |
 | `src/RequestEditor.tsx`, `src/request-replay.ts` | Editable requests, explicit resends, and response comparison |
+| `src/session-replay.ts`, `src/website-replay.ts` | Private authentication reuse and resending from the source document |
 | `src/sidepanel.tsx`, `src/panel-page.ts` | Side panel interface, field highlighting, and undo |
 | `src/main.tsx` | Options interface and development preview |
 | `src/welcome.tsx` | First-install guide and interactive example |

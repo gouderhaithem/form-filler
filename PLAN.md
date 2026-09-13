@@ -109,3 +109,10 @@ Migrate older saved settings to replacement and unknown-field filling. Generate 
 - Stop redirects for review; support cancellation and a 20-second timeout, without retries.
 - Validate drafts, preserve form encoding, and keep redaction in captured and resent snapshots.
 - Ship as a separate commit after the request inspector so this feature can be reverted independently.
+
+## v0.10.1 authenticated resend fix
+
+- Default captured requests to website-session replay, with source-page cookies and Origin/Referer.
+- Keep captured authentication headers privately in recorder memory and restore them only for the original API origin.
+- Keep independent extension requests available, and verify authenticated requests against a cookie/auth/CSRF/Origin/Referer fixture.
+- Pin resends and cancellations to the inspected source document; reject changed pages and cross-origin credential reuse.

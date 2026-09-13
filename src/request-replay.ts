@@ -1,15 +1,15 @@
 import {bodyPreview,cleanHeaders,cleanURL,MAX_BODY_BYTES,type RequestEntry} from './network';
 export const METHODS=['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] as const;
 export interface Pair {name:string;value:string}
-export interface RequestDraft {url:string;method:string;headers:Pair[];body:string;cookies:boolean}
-export interface ReplayResult extends RequestEntry {cookies:boolean}
+export interface RequestDraft {url:string;method:string;headers:Pair[];body:string;cookies:boolean;transport?:'website'|'extension';reuseAuth?:boolean}
+export interface ReplayResult extends RequestEntry {cookies:boolean;transport?:'website'|'extension';reusedHeaders?:string[]}
 // These headers are controlled by Fetch; showing them as editable would silently misrepresent the send.
 export function browserHeader(name:string) {
   return /^(?:sec-|proxy-|:)/i.test(name) || /^(?:accept-charset|accept-encoding|access-control-request-headers|access-control-request-method|connection|content-length|cookie2?|date|dnt|expect|host|keep-alive|origin|permissions-policy|referer|te|trailer|transfer-encoding|upgrade|via|user-agent)$/i.test(name);
 }
 function hidden(value:string){return /\[hidden\]|%5bhidden%5d/i.test(value);}
 export function createDraft(entry:RequestEntry):RequestDraft {
-  return {url:entry.url,method:entry.method,headers:Object.entries(entry.requestHeaders).filter(([name,value])=>!browserHeader(name)&&!hidden(value)).map(([name,value])=>({name,value})),body:entry.editableBody ?? '',cookies:false};
+  return {url:entry.url,method:entry.method,headers:Object.entries(entry.requestHeaders).filter(([name,value])=>!browserHeader(name)&&!hidden(value)).map(([name,value])=>({name,value})),body:entry.editableBody ?? '',cookies:!!entry.sourceOrigin,transport:entry.sourceOrigin?'website':'extension',reuseAuth:!!entry.authenticationHeaders?.length};
 }
 export function prepareRequest(draft:RequestDraft) {
   let url:URL;

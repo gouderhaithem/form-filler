@@ -1,3 +1,4 @@
+import {browserHeader} from './request-replay';
 import {bodyPreview,editableBody,cleanHeaders,cleanURL,MAX_BODY_BYTES,MAX_REQUESTS,type CaptureState,type RequestEntry} from './network';
 interface DebuggerAPI {
   attach:(tabId:number)=>Promise<void>;
@@ -5,7 +6,7 @@ interface DebuggerAPI {
   command:(tabId:number,method:string,params?:Record<string,unknown>)=>Promise<unknown>;
 }
 interface NetworkEvent {
-  requestId?:string;type?:string;timestamp?:number;wallTime?:number;errorText?:string;
+  requestId?:string;documentURL?:string;type?:string;timestamp?:number;wallTime?:number;errorText?:string;
   request?:{url:string;method:string;headers?:Record<string,unknown>;postData?:string;hasPostData?:boolean};
   response?:{status:number;statusText:string;headers?:Record<string,unknown>;mimeType?:string};
   redirectResponse?:{status:number;statusText:string;headers?:Record<string,unknown>};
@@ -16,6 +17,14 @@ export class NetworkRecorder {
   private generation=0;
   private rows=new Map<string,{entry:RequestEntry;timestamp:number}>();
   private transitioning=false;
+  // Unredacted authentication headers are never included in capture views or storage.
+  private sessions=new Map<string,{tabId:number;pageURL:string;requestOrigin:string;headers:Record<string,string>}>();
+  replayContext(id:string,url:string,reuse:boolean) {
+    const session=this.sessions.get(id);
+    if(!session)throw new Error('The captured session is no longer available. Record the request again.');
+    if(reuse && new URL(url).origin!==session.requestOrigin)throw new Error('Turn off captured authentication before sending to a different origin.');
+    return {...session,headers:reuse?{...session.headers}:{}};
+  }
   constructor(private api:DebuggerAPI){}
   get state(){return structuredClone(this.capture);}
   view(selectedId?:string):CaptureState{return {...this.capture,entries:this.capture.entries.map(entry=>entry.id===selectedId?{...entry}:{...entry,requestBody:undefined,editableBody:undefined,responseBody:undefined,requestHeaders:{},responseHeaders:{}})};}
@@ -26,7 +35,7 @@ export class NetworkRecorder {
     let attached=false;
     try {
       await this.api.attach(tabId);attached=true;
-      ++this.generation;this.rows.clear();
+      ++this.generation;this.rows.clear();this.sessions.clear();
       this.capture={recording:true,tabId,site,message:'Recording fetch, XHR, and document requests from this tab.',entries:[]};
       await this.api.command(tabId,'Network.enable',{maxTotalBufferSize:4*1024*1024,maxResourceBufferSize:128*1024,maxPostDataSize:MAX_BODY_BYTES});
     } catch(error) {
@@ -49,7 +58,7 @@ export class NetworkRecorder {
     for(const entry of this.capture.entries)if(entry.state==='pending'){entry.state='stopped';entry.bodyNote='Recording ended before the response completed.';}
     this.rows.clear();
   }
-  clear(){++this.generation;this.rows.clear();this.capture.entries=[];}
+  clear(){++this.generation;this.rows.clear();this.sessions.clear();this.capture.entries=[];}
   async event(tabId:number,method:string,params:unknown) {
     if(!this.capture.recording || this.capture.tabId!==tabId || !params || typeof params!=='object')return;
     const event=params as NetworkEvent;
@@ -62,8 +71,12 @@ export class NetworkRecorder {
       if(prior && event.redirectResponse){prior.entry.state='redirected';prior.entry.status=event.redirectResponse.status;prior.entry.statusText=event.redirectResponse.statusText;prior.entry.responseHeaders=cleanHeaders(event.redirectResponse.headers);prior.entry.duration=Math.max(0,Math.round(((event.timestamp || 0)-prior.timestamp)*1000));prior.entry.bodyNote='Redirect response. The following request appears separately.';}
       if(!['Fetch','XHR','Document'].includes(event.type || '') || !/^https?:/i.test(event.request.url)){this.rows.delete(key);return;}
       const entry:RequestEntry={id:crypto.randomUUID(),url:cleanURL(event.request.url),method:event.request.method,kind:event.type!,startedAt:(event.wallTime || Date.now()/1000)*1000,state:'pending',requestHeaders:cleanHeaders(event.request.headers),responseHeaders:{}};
+      const headers=Object.fromEntries(Object.entries(event.request.headers || {}).filter(([name,value])=>!browserHeader(name) && entry.requestHeaders[name]==='[hidden]' && typeof value==='string').map(([name,value])=>[name,String(value)]));
+      let pageURL='';try{const source=new URL(event.documentURL || '');if(/^https?:$/.test(source.protocol)){source.hash='';pageURL=source.href;entry.sourceOrigin=source.origin;}}catch{}
+      entry.authenticationHeaders=Object.keys(headers);
+      this.sessions.set(entry.id,{tabId,pageURL,requestOrigin:new URL(event.request.url).origin,headers});
       this.capture.entries.push(entry);this.rows.set(key,{entry,timestamp:event.timestamp || 0});
-      if(this.capture.entries.length>MAX_REQUESTS){const removed=this.capture.entries.shift();for(const [id,row] of this.rows)if(row.entry===removed)this.rows.delete(id);}
+      if(this.capture.entries.length>MAX_REQUESTS){const removed=this.capture.entries.shift();if(removed)this.sessions.delete(removed.id);for(const [id,row] of this.rows)if(row.entry===removed)this.rows.delete(id);}
       const mime=Object.entries(event.request.headers || {}).find(([name])=>name.toLowerCase()==='content-type')?.[1];
       const applyBody=(body:string)=>{const preview=bodyPreview(body,String(mime || ''));entry.requestBody=preview.text;entry.editableBody=editableBody(body,String(mime || ''));if(preview.note){entry.bodyNote=preview.note;entry.requestBodyNote=preview.note;}};
       if(event.request.postData!==undefined)applyBody(event.request.postData);

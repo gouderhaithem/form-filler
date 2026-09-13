@@ -44,6 +44,7 @@ test('edits and resends captured requests with real payloads, responses, and per
     await panel.evaluate('document.querySelector(".request-row").click()');
     await expect.poll(()=>panel.evaluate('document.querySelector(".request-detail").textContent')).toContain('original@example.com');
     await click('Stop recording');await click('Edit & resend');
+    await fill('[aria-label="Send from"]','extension');
     await click('Send');await expect.poll(editor).toContain('Replace or remove hidden values');expect(received).toHaveLength(1);
     await fill('.editor-address input',`${base}/api/edited?source=panel`);
     await fill('.editor-address select','PATCH');
@@ -74,7 +75,7 @@ test('edits and resends captured requests with real payloads, responses, and per
     await expect.poll(editor).toContain('Email rejected');expect(await editor()).toContain('422');expect(received[2].cookie).toBe('test_session=fixture');
     await fill('.editor-address input',`${base}/redirect`);await click('Send');await expect.poll(editor).toContain('Redirect stopped');expect(received.some(item=>item.url==='/redirect-destination')).toBe(false);
     await fill('.editor-address input',`${base}/slow`);await click('Send');await expect.poll(()=>received.some(item=>item.url==='/slow')).toBe(true);await click('Cancel');await expect.poll(editor).toContain('may already have reached the server');
-    expect(await panel.evaluate('document.querySelectorAll(".replay-history option").length')).toBe(4);
+    expect(await panel.evaluate('document.querySelectorAll(".replay-response .replay-history option").length')).toBe(4);
     await click('Close editor');expect(await editor()).toBe('');expect(panel.errors).toEqual([]);
   }finally{await context.close();await rm(root,{recursive:true,force:true});server.closeAllConnections();await new Promise<void>(done=>server.close(()=>done()));}
 });

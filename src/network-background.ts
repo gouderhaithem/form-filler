@@ -1,9 +1,11 @@
+import {registerSessionReplay} from './session-replay';
 import {NetworkRecorder} from './network-recorder';
 const recorder=new NetworkRecorder({
   attach:tabId=>chrome.debugger.attach({tabId},'1.3'),
   detach:tabId=>chrome.debugger.detach({tabId}),
   command:(tabId,method,params)=>chrome.debugger.sendCommand({tabId},method,params),
 });
+registerSessionReplay(recorder);
 let recordingWindow:number|undefined;
 chrome.debugger.onEvent.addListener((source,method,params)=>{
   if(source.tabId!==undefined && !('sessionId' in source && source.sessionId))void recorder.event(source.tabId,method,params).catch(()=>{});

@@ -19,6 +19,8 @@ export interface RequestEntry {
   bodyNote?: string;
   error?: string;
   mimeType?: string;
+  sourceOrigin?: string;
+  authenticationHeaders?: string[];
 }
 export interface CaptureState {
   recording: boolean;

@@ -88,7 +88,7 @@ function App() {
         {isExtension()&&<p className="helper">To fill a website, switch to its tab and click the Formly toolbar icon. These settings apply automatically. For field details and undo, right-click the icon → Open Formly panel, or press Alt + Shift + F.</p>}
         <p className="footnote">New data with every click. {settings.overwrite?'Existing values will be replaced.':'Existing values are kept.'}</p>
       </div>
-      <footer><span><span className="status-dot"/> Your browser, your test data</span><a className="welcome-link" href="./welcome.html" target="_blank" rel="noreferrer">Welcome guide ↗</a><span>v0.10</span></footer>
+      <footer><span><span className="status-dot"/> Your browser, your test data</span><a className="welcome-link" href="./welcome.html" target="_blank" rel="noreferrer">Welcome guide ↗</a><span>v0.10.1</span></footer>
     </main>
     {!isExtension()&&<section className="demo"><div className="demo-header"><FlaskConical size={20}/><div><h2>Try it on a real form</h2><p>This local demo uses the same filling engine as the extension.</p></div><a href="/demo.html" target="_blank" rel="noreferrer">Open form <ArrowUpRight size={14}/></a></div><iframe id="demo-form" title="Mixed-language test form" src="/demo.html"/><p className="demo-tip">Use the generator on the left, then watch the fields fill here.</p></section>}
   </div>;
