@@ -124,3 +124,10 @@ Migrate older saved settings to replacement and unknown-field filling. Generate 
 - Keep Fill entirely independent of network generation: consume ready suggestions or use local data immediately.
 - Debounce and deduplicate preparation, pin scans to source documents, and serialize cache updates with fills.
 - Verify a held AI response, new forms appearing during generation, no value leakage, and disabling observers.
+
+## v0.11.1 wait for AI before filling
+
+- Preserve automatic form preloading; Fill joins the pending request and waits for all required suggestions.
+- Request missing or expired suggestions, sharing per-page work rather than duplicating preload requests.
+- Fall back to local data only for quota/rate-limit errors; other AI failures leave the form untouched.
+- Remember quota failures for one minute and verify delayed responses, newly appeared fields, and error behavior.

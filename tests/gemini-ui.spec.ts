@@ -109,7 +109,7 @@ test('Gemini main tab, automatic reload preparation, cache reuse, expiry and fal
     await expect.poll(()=>worker.evaluate(async()=>(await chrome.storage.session.get('geminiStatus')).geminiStatus)).toContain('quota');
     await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
     await expect(website.locator('#project-code')).toHaveValue(/^[A-Za-z]+$/);
-    await expect.poll(()=>worker.evaluate(async()=>(await chrome.storage.session.get('geminiStatus')).geminiStatus)).toContain('local data immediately');
+    await expect.poll(()=>worker.evaluate(async()=>(await chrome.storage.session.get('geminiStatus')).geminiStatus)).toContain('Local fallback is active');
     await options.reload();await expect(options.getByLabel('API key',{exact:true})).toHaveValue('fake-key-for-local-tests');
     await options.getByRole('button',{name:'Remove saved key',exact:true}).click();
     await expect(options.getByLabel('API key',{exact:true})).toHaveValue('');

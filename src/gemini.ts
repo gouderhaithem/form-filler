@@ -20,19 +20,22 @@ export function validateGemini(value:unknown):GeminiConfig {
 
 const base='https://generativelanguage.googleapis.com/v1beta/';
 // Overloaded flash models answer a large share of requests with 503/429 and recover within a second,
-// so a short backoff turns most of those blips into successes instead of a local-fallback fill.
+// so a short backoff can recover while a fill is waiting.
 const RETRYABLE=new Set([429,500,502,503,504]);
 const RETRY_DELAYS=[400,1200];
 const MAX_RETRY_WAIT=5000;
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+export class GeminiQuotaError extends Error {
+  constructor(){super('Gemini quota or rate limit reached.');this.name='GeminiQuotaError';}
+}
 function requestError(status:number):Error {
   if([400,401,403].includes(status)) return new Error('Gemini rejected the request. Check your key, model access, and API restrictions.');
-  if(status===429) return new Error('Gemini quota or rate limit reached. Try again later.');
+  if(status===429) return new GeminiQuotaError();
   if(status===404) return new Error('This Gemini model is unavailable. Test your key to choose an available model.');
   return new Error(`Gemini is unavailable (HTTP ${status}). Try again later.`);
 }
 async function request(path:string,apiKey:string,body?:unknown):Promise<unknown> {
-  const offline=new Error('Gemini did not respond. Check your connection; local filling is still available.');
+  const offline=new Error('Gemini did not respond. Check your connection and try again.');
   for(let attempt=0;;attempt++) {
     const retries=attempt<RETRY_DELAYS.length;
     let response:Response;
@@ -73,7 +76,7 @@ export function parseSuggestions(response:unknown,fields:UnknownField[]):Record<
     const values=[...new Set(entry.values.filter((v):v is string=>typeof v==='string').map(v=>v.trim()).filter(v=>v.length>0 && v.length<=500 && !machineId.test(v) && (field.maxLength<0 || v.length<=field.maxLength) && v.length>=Math.max(0,field.minLength)))].slice(0,10);
     if(values.length) result[entry.id]=values;
   }
-  if(!Object.keys(result).length) throw new Error('Gemini returned no usable suggestions. Local words will be used.');
+  if(!Object.keys(result).length) throw new Error('Gemini returned no usable suggestions. Try again.');
   return result;
 }
 
@@ -84,9 +87,9 @@ export async function generateSuggestions(config:Pick<GeminiConfig,'enabled'|'ap
     generationConfig:{temperature:0.9,maxOutputTokens:8192,responseMimeType:'application/json',responseSchema:{type:'OBJECT',properties:{fields:{type:'ARRAY',items:{type:'OBJECT',properties:{id:{type:'STRING'},values:{type:'ARRAY',items:{type:'STRING'}}},required:['id','values']}}},required:['fields']}},
   }) as {candidates?:{content?:{parts?:{text?:string}[]}}[]};
   const raw=response?.candidates?.[0]?.content?.parts?.map(part=>part.text || '').join('');
-  if(!raw) throw new Error('Gemini returned no suggestions. Local words will be used.');
+  if(!raw) throw new Error('Gemini returned no suggestions. Try again.');
   let parsed:unknown;
-  try{parsed=JSON.parse(raw);}catch{throw new Error('Gemini returned invalid JSON. Local words will be used.');}
+  try{parsed=JSON.parse(raw);}catch{throw new Error('Gemini returned invalid JSON. Try again.');}
   return parseSuggestions(parsed,fields);
 }
 

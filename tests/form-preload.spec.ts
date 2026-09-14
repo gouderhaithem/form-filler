@@ -3,7 +3,7 @@ import {mkdtemp,rm,cp,readFile,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 
-test('prepares late forms before clicks and fills immediately while AI is pending',async()=>{
+test('prepares late forms before clicks and waits for AI before filling',async()=>{
   test.setTimeout(60000);
   const root=await mkdtemp(resolve(tmpdir(),'formly-preload-')),extension=resolve(root,'extension');await cp(resolve('dist'),extension,{recursive:true});
   const manifest=JSON.parse(await readFile(resolve(extension,'manifest.json'),'utf8'));manifest.host_permissions.push('http://*/*','https://*/*');await writeFile(resolve(extension,'manifest.json'),JSON.stringify(manifest));
@@ -11,9 +11,10 @@ test('prepares late forms before clicks and fills immediately while AI is pendin
   try{
     const worker=context.serviceWorkers()[0] || await context.waitForEvent('serviceworker'),id=worker.url().split('/')[2];
     await worker.evaluate(()=>{
-      const state=globalThis as typeof globalThis & {requests:{fields:{id:string;label:string}[]}[];release?:()=>void};state.requests=[];
+      const state=globalThis as typeof globalThis & {requests:{fields:{id:string;label:string}[]}[];release?:()=>void;errorStatus?:number};state.requests=[];
       globalThis.fetch=async(_input,init)=>{
         if(!init?.body)return new Response(JSON.stringify({models:[{name:'models/gemini-2.5-flash',supportedGenerationMethods:['generateContent']}]}));
+        if(state.errorStatus)return new Response('Provider error',{status:state.errorStatus});
         const metadata=JSON.parse(JSON.parse(String(init.body)).contents[0].parts[0].text);state.requests.push(metadata);
         return new Promise<Response>(done=>{state.release=()=>done(new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({fields:metadata.fields.map((field:{id:string})=>({id:field.id,values:['Cedar','Maple','Willow','Birch']}))})}]}}]})));});
       };
@@ -33,21 +34,31 @@ test('prepares late forms before clicks and fills immediately while AI is pendin
     const targets=(await cdp.send('Target.getTargets',{filter:[{type:'tab',exclude:false},{exclude:true}]})).targetInfos;
     const target=targets.find(t=>t.url===website.url())!;
     await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
-    await expect(website.locator('#project')).not.toHaveValue('',{timeout:1500});await expect(website.locator('#campaign')).not.toHaveValue('');
+    const tabId=await worker.evaluate(async()=> (await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0].id!);
+    await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getTitle({tabId}),tabId)).toContain('waiting for AI');
+    await website.waitForTimeout(300);
+    await expect(website.locator('#project')).toHaveValue('');await expect(website.locator('#campaign')).toHaveValue('');
     expect(await requests()).toHaveLength(1);
     await worker.evaluate(()=>(globalThis as typeof globalThis & {release?:()=>void}).release?.());
     await expect.poll(async()=>(await requests()).length).toBe(2);
     expect((await requests())[1]).toMatchObject({fields:[{label:'Campaign concept'}]});
-    // Consume the first field's cached data while the second field is still generating.
-    await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});await expect(website.locator('#project')).toHaveValue('Cedar');
-    await expect.poll(()=>worker.evaluate(async()=>Object.values(await chrome.storage.session.get(null)).filter((entry:any)=>entry?.values).flatMap((entry:any)=>Object.values(entry.values)).some((values:any)=>values[0]==='Maple'))).toBe(true);
+    // Keep the form untouched until suggestions for the newly appeared field are ready too.
+    await expect(website.locator('#project')).toHaveValue('');await expect(website.locator('#campaign')).toHaveValue('');
     await worker.evaluate(()=>(globalThis as typeof globalThis & {release?:()=>void}).release?.());
     await expect.poll(()=>worker.evaluate(async()=>Object.values(await chrome.storage.session.get(null)).filter((entry:any)=>entry?.values).flatMap((entry:any)=>Object.keys(entry.values)).length)).toBe(2);
+    await expect(website.locator('#project')).toHaveValue('Cedar');
+    await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getTitle({tabId}),tabId)).toMatch(/^Formly: \d+ filled,/);
     await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});await expect(website.locator('#project')).toHaveValue('Maple');expect(await requests()).toHaveLength(2);
     // Typing or unrelated page activity must not ask Gemini for another batch.
     await website.locator('#project').fill('PRIVATE ENTERED VALUE');
     await website.evaluate(()=>{for(let i=0;i<10;i++)document.querySelector('#clock')!.textContent=String(i);});
     await website.waitForTimeout(1200);expect(await requests()).toHaveLength(2);expect(JSON.stringify(await requests())).not.toContain('PRIVATE ENTERED VALUE');
+    // A non-quota AI error must not silently fill local values.
+    await options.evaluate(()=>chrome.runtime.sendMessage({type:'gemini:clear'}));
+    await worker.evaluate(()=>{(globalThis as typeof globalThis & {errorStatus?:number}).errorStatus=403;});
+    await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
+    await expect.poll(()=>worker.evaluate(tabId=>chrome.action.getTitle({tabId}),tabId)).toContain('rejected');
+    await expect(website.locator('#project')).toHaveValue('PRIVATE ENTERED VALUE');
     // Turning Gemini off removes future injections and stops preparation on an already open page.
     await options.getByLabel('Use Gemini for unknown fields').uncheck();await options.getByRole('button',{name:'Save settings',exact:true}).click();await expect(options.getByRole('status')).toContainText('Local generation is active');
     expect(await worker.evaluate(()=>chrome.scripting.getRegisteredContentScripts())).toEqual([]);

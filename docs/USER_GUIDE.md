@@ -55,7 +55,7 @@ The toolbar badge shows the number of filled fields. Hover over the icon for det
 
 ## Side panel
 
-Right-click the toolbar icon → **Open Formly panel**, or press **Alt + Shift + F**. The panel stays beside the website and follows the active tab. Ordinary toolbar clicks still fill immediately.
+Right-click the toolbar icon → **Open Formly panel**, or press **Alt + Shift + F**. The panel stays beside the website and follows the active tab. Ordinary toolbar clicks fill the page and wait if AI data is still pending.
 
 Use the field list to inspect filled/skipped results, highlight a control, save a custom value, or exclude a field. Panel custom rules target a CSS selector on the exact hostname and take priority over autocomplete. You can change their values or delete them in **Options → Custom fields**. If the website changes its markup, recreate the rule. Panel exclusions appear in **Options → Excluded fields**.
 
@@ -107,9 +107,9 @@ Local generation works without an account or API key. To add contextual suggesti
 4. Accept the browser’s website-access request. This lets Formly prepare suggestions automatically when websites load, forms appear later, or you return to a tab.
 5. Open a website or dialog containing a form. Formly prepares data in the background, including on pages that were already open. Click Formly when you want to fill it.
 
-**Forms appearing prepares data; clicking fills immediately.** Late-rendered forms and forms revealed in dialogs are detected automatically. Hidden tabs wait until visible. Clicking Fill does not start or wait for a Gemini request; if AI is pending or unavailable, the local generator fills immediately. A request asks for up to ten suggestions for each of up to 30 unknown fields. Recognized fields, custom rules, dropdowns, and radio groups use the local engine. Unanswered fields or failed requests fall back to local data.
+**Forms appearing prepares data; clicking waits for AI if needed.** Late-rendered forms and forms revealed in dialogs are detected automatically. Hidden tabs wait until visible. Fill shares an existing preload and waits for its response. Missing or expired suggestions are generated before filling. Only a quota/rate-limit error switches to local data; other AI errors leave the form untouched. A request asks for up to ten suggestions for each of up to 30 unknown fields. Recognized fields, custom rules, dropdowns, and radio groups use the local engine. Incomplete or invalid AI results show an error instead of silently filling local values.
 
-Gemini uses your Google project’s quota and billing settings. Formly briefly retries temporary errors before falling back. Model availability depends on your key; use **Test key** to check access.
+Gemini uses your Google project’s quota and billing settings. Formly briefly retries temporary errors while the fill waits. A final quota/rate-limit error enables local fallback for one minute; other failures are reported. Model availability depends on your key; use **Test key** to check access.
 
 ### Your cache, your timing
 
@@ -124,7 +124,7 @@ In **Options → Gemini → Suggestion cache**:
 
 Batches are isolated by tab, website origin, language, model, and key. Each field keeps its remaining suggestions when the surrounding form changes. Only new or exhausted fields need another request when background detection runs. Normal typing and unrelated DOM changes do not repeatedly request data. Adding fields does **not** extend the existing batch’s expiry.
 
-Clicks consume suggestions in order. Reloading the same form reuses the remaining batch until it expires. After clearing or expiry, the next eligible page load, form change, or return to the tab prepares a fresh batch. A click uses available cache or local data; it never triggers an AI fetch. Memory is bounded to 24 batches, with up to 120 field signatures per batch.
+Clicks consume suggestions in order. Reloading the same form reuses the remaining batch until it expires. After clearing or expiry, the next eligible page load, form change, or return to the tab prepares a fresh batch. A click uses available cache, waits for an in-flight preload, or requests missing suggestions. Memory is bounded to 24 batches, with up to 120 field signatures per batch.
 
 Suggestions live in session memory. Expiry is checked before filling, and a cleanup alarm removes expired entries. If the browser delays an alarm while sleeping, expired values are still rejected on the next access. Extension reloads, disabling the extension, or a browser restart clear this [session storage](https://developer.chrome.com/docs/extensions/reference/api/storage#property-session).
 
