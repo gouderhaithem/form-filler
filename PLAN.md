@@ -116,3 +116,11 @@ Migrate older saved settings to replacement and unknown-field filling. Generate 
 - Keep captured authentication headers privately in recorder memory and restore them only for the original API origin.
 - Keep independent extension requests available, and verify authenticated requests against a cookie/auth/CSRF/Origin/Referer fixture.
 - Pin resends and cancellations to the inspected source document; reject changed pages and cross-origin credential reuse.
+
+## v0.11 automatic form preparation
+
+- Register a top-document form observer only while Gemini is enabled and only for approved hosts.
+- Detect parsed forms, delayed app rendering, dialogs, form metadata changes, and tab returns; prepare data before Fill.
+- Keep Fill entirely independent of network generation: consume ready suggestions or use local data immediately.
+- Debounce and deduplicate preparation, pin scans to source documents, and serialize cache updates with fills.
+- Verify a held AI response, new forms appearing during generation, no value leakage, and disabling observers.

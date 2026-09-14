@@ -38,7 +38,7 @@ test('a form that grows after filling keeps reusing its cached suggestions',asyn
     await expect(options.getByRole('status')).toContainText('Key accepted');
     await options.getByLabel('Use Gemini for unknown fields').check();
     await options.getByRole('button',{name:'Save settings',exact:true}).click();
-    await expect(options.getByRole('status')).toContainText('Reload a website');
+    await expect(options.getByRole('status')).toContainText('Suggestions prepare automatically');
 
     const website=await context.newPage();
     await website.goto('http://127.0.0.1:5188/dynamic-form.html');
@@ -63,6 +63,8 @@ test('a form that grows after filling keeps reusing its cached suggestions',asyn
     await fillAndWait('Cedar');
     await expect(website.locator('#confirm-code')).toHaveValue('');
 
+    await expect.poll(async()=>(await requests()).length).toBe(2);
+    await expect.poll(()=>worker.evaluate(async()=>Object.values((Object.values(await chrome.storage.session.get(null)).find((item:any)=>item?.values) as any)?.values || {}).filter((values:any)=>values[0]==='Cedar').length)).toBe(1);
     // The revealed field is the only thing worth asking about; the originals keep their cached values.
     await fillAndWait('Maple');
     await expect(website.locator('#confirm-code')).toHaveValue('Cedar');

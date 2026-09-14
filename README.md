@@ -6,7 +6,7 @@
 <p align="center">Fill website forms with fresh, fictional test data in one toolbar click.</p>
 <p align="center">
   <a href="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml"><img src="https://github.com/gouderhaithem/form-filler/actions/workflows/ci.yml/badge.svg" alt="Build and tests" /></a>
-  <img src="https://img.shields.io/badge/version-0.10.1-5370ce" alt="Version 0.10.1" />
+  <img src="https://img.shields.io/badge/version-0.11.0-5370ce" alt="Version 0.11.0" />
   <img src="https://img.shields.io/badge/Chrome_%26_Edge-Manifest_V3-527b66" alt="Chrome and Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/TypeScript-React-3178c6" alt="TypeScript and React" />
 </p>
@@ -117,7 +117,9 @@ The destination access uses Chrome’s existing optional host permissions. See [
 
 In the installed extension, open **Options → Gemini**, enter your own API key, and click **Test key**. Choose an available model, enable **Use Gemini for unknown fields**, save, and accept the browser's website-access request.
 
-Reloading a page prepares suggestions. Clicking the toolbar fills the form. Recognized fields use the local engine, and failed requests fall back to local data. Gemini requests use your Google project's quota and billing settings.
+Formly prepares AI suggestions as forms appear, including forms rendered later by React/Vue, dialogs, and navigation within an app. Existing open pages are covered when you enable Gemini. Hidden tabs wait until you return to them.
+
+**Clicking Fill never starts or waits for an AI request.** Ready suggestions are used immediately; fields still waiting on AI use local data. Forms remain untouched until you click. Background preparation deduplicates requests and only sends field descriptions, not entered values. Recognized fields continue to use the local engine. Gemini requests use your Google project's quota and billing settings.
 
 See the [complete user guide](docs/USER_GUIDE.md#gemini-optional) for cache behavior, settings, permissions, and troubleshooting.
 
@@ -159,6 +161,7 @@ Run `npm run build` before the browser tests. CI runs the build and both test su
 | `src/data.ts`, `src/samples.ts` | Fictional values and multilingual samples |
 | `src/background.ts` | Toolbar action, Gemini preparation, and session cache |
 | `src/gemini.ts` | Provider requests, response validation, and cache configuration |
+| `src/form-preload.ts`, `public/form-watch.js` | Detect forms as they appear and prepare Gemini data before filling |
 | `src/RequestsPanel.tsx`, `src/network-recorder.ts` | Request inspector and bounded network capture |
 | `src/RequestEditor.tsx`, `src/request-replay.ts` | Editable requests, explicit resends, and response comparison |
 | `src/session-replay.ts`, `src/website-replay.ts` | Private authentication reuse and resending from the source document |

@@ -49,7 +49,7 @@ test('Gemini main tab, automatic reload preparation, cache reuse, expiry and fal
     await expect(options.getByRole('status')).toContainText('Key accepted');
     await options.getByLabel('Use Gemini for unknown fields').check();
     await options.getByRole('button',{name:'Save settings',exact:true}).click();
-    await expect(options.getByRole('status')).toContainText('Reload a website');
+    await expect(options.getByRole('status')).toContainText('Suggestions prepare automatically');
     await expect.poll(()=>worker.evaluate(()=>chrome.permissions.contains({origins:['http://*/*','https://*/*']}))).toBe(true);
     const website=await context.newPage();
     await website.addInitScript(()=>document.addEventListener('DOMContentLoaded',()=>{const field=document.querySelector<HTMLInputElement>('#project-code');if(field)field.value='Private entered value';const header=document.createElement('header');header.innerHTML='<input id=header-special value=Navigation><select id=header-region><option value=en>English</option><option value=fr>French</option></select>';document.body.prepend(header);}));
@@ -89,7 +89,7 @@ test('Gemini main tab, automatic reload preparation, cache reuse, expiry and fal
     await options.getByLabel('Cache expiry (minutes)',{exact:true}).fill('2');
     await options.getByRole('button',{name:'Save expiry',exact:true}).click();
     await expect(options.getByText('Cache expiry saved: 2 minutes. Previous suggestions cleared.')).toBeVisible();
-    expect(await worker.evaluate(async()=>Object.keys(await chrome.storage.session.get(null)).filter(key=>key.startsWith('gemini-cache:')).length)).toBe(0);
+    // Open forms can already be preparing the replacement batch with the new duration.
     await options.reload();
     await expect(options.getByLabel('Cache expiry (minutes)',{exact:true})).toHaveValue('2');
     await expect(options.getByLabel('Use Gemini for unknown fields')).toBeChecked();
@@ -105,9 +105,11 @@ test('Gemini main tab, automatic reload preparation, cache reuse, expiry and fal
     await options.getByRole('button',{name:'Clear Gemini cache'}).click();
     await expect(options.getByText('Cached suggestions cleared.')).toBeVisible();
     await worker.evaluate(()=>{(globalThis as typeof globalThis & {testFail:boolean}).testFail=true;});
+    await website.reload();
+    await expect.poll(()=>worker.evaluate(async()=>(await chrome.storage.session.get('geminiStatus')).geminiStatus)).toContain('quota');
     await cdp.send('Extensions.triggerAction',{id,targetId:target.targetId});
     await expect(website.locator('#project-code')).toHaveValue(/^[A-Za-z]+$/);
-    await expect.poll(()=>worker.evaluate(async()=>(await chrome.storage.session.get('geminiStatus')).geminiStatus)).toContain('quota');
+    await expect.poll(()=>worker.evaluate(async()=>(await chrome.storage.session.get('geminiStatus')).geminiStatus)).toContain('local data immediately');
     await options.reload();await expect(options.getByLabel('API key',{exact:true})).toHaveValue('fake-key-for-local-tests');
     await options.getByRole('button',{name:'Remove saved key',exact:true}).click();
     await expect(options.getByLabel('API key',{exact:true})).toHaveValue('');

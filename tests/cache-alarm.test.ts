@@ -6,6 +6,7 @@ it('deletes expired cache entries when Chrome fires the cleanup alarm',async()=>
   vi.stubGlobal('chrome',{
     storage:{onChanged:{addListener:vi.fn()},local:{setAccessLevel:vi.fn().mockResolvedValue(undefined)},session:{get:vi.fn().mockResolvedValue(cache),remove}},
     alarms:{onAlarm:{addListener:alarm},create:vi.fn().mockResolvedValue(undefined),clear:vi.fn().mockResolvedValue(undefined)},
+    permissions:{onAdded:{addListener:vi.fn()},onRemoved:{addListener:vi.fn()}},
     debugger:{onEvent:{addListener:vi.fn()},onDetach:{addListener:vi.fn()}},
     tabs:{onActivated:{addListener:vi.fn()},onUpdated:{addListener:vi.fn()},onRemoved:{addListener:vi.fn()}},
     contextMenus:{onClicked:{addListener:vi.fn()}},commands:{onCommand:{addListener:vi.fn()}},

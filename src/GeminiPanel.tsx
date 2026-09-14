@@ -44,10 +44,10 @@ export function GeminiPanel() {
       if(config.enabled) {
         if(!config.apiKey.trim()) throw new Error('Enter your API key first.');
         const granted=await chrome.permissions.request({origins:['http://*/*','https://*/*']});
-        if(!granted) throw new Error('Website access is needed to prepare data on reload. Allow access and save again.');
+        if(!granted) throw new Error('Website access is needed to prepare data as forms appear. Allow access and save again.');
       }
       const reply=await send({type:'gemini:save',config});setConfig(reply.config!);setCache(reply.status!);
-      setMessage(config.enabled?'Saved. Reload a website to prepare its suggestions.':'Saved. Local generation is active.');
+      setMessage(config.enabled?'Saved. Suggestions prepare automatically as forms appear, including on open pages.':'Saved. Local generation is active.');
     });
   }
   const disabled=!installed||!ready||!!busy;
@@ -55,9 +55,9 @@ export function GeminiPanel() {
   const durationValid=validCacheMinutes(Number(cacheMinutes));
   return <section className="gemini-panel" aria-label="Gemini settings">
     <div className="section-heading"><h2>Context for unfamiliar fields</h2><span className="gemini-tag">GEMINI</span></div>
-    <p className="helper">Gemini reads field labels and prepares relevant words and phrases when a website loads. The toolbar icon fills them when you click.</p>
+    <p className="helper">Gemini reads field labels and prepares relevant words and phrases as forms appear, including dialogs and pages rendered later. Click Fill to use ready suggestions instantly; local data fills any fields still waiting.</p>
     {!installed&&<div className="gemini-info">Open Formly’s extension <strong>Options</strong> to connect your key. This webpage is a local UI preview.</div>}
-    <label className="toggle-row"><span><strong>Use Gemini for unknown fields</strong><small>Prepare suggestions automatically on website reload.</small></span><input type="checkbox" checked={config.enabled} disabled={disabled} onChange={e=>setConfig({...config,enabled:e.target.checked})}/></label>
+    <label className="toggle-row"><span><strong>Use Gemini for unknown fields</strong><small>Prepare suggestions when pages load or new forms appear.</small></span><input type="checkbox" checked={config.enabled} disabled={disabled} onChange={e=>setConfig({...config,enabled:e.target.checked})}/></label>
     <div className="gemini-field"><label htmlFor="gemini-key"><KeyRound size={13}/> API key</label><div className="key-input"><input id="gemini-key" type={visible?'text':'password'} value={config.apiKey} autoComplete="off" spellCheck={false} disabled={disabled} placeholder="Paste your Gemini API key" onChange={e=>setConfig({...config,apiKey:e.target.value})}/><button className="icon" aria-label={visible?'Hide API key':'Show API key'} disabled={disabled} onClick={()=>setVisible(!visible)}>{visible?<EyeOff size={16}/>:<Eye size={16}/>}</button></div><a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Get a key in Google AI Studio ↗</a></div>
     <div className="gemini-field"><label htmlFor="gemini-model">Model</label><select id="gemini-model" value={config.model} disabled={disabled} onChange={e=>setConfig({...config,model:e.target.value})}>{[...new Set([config.model,...models])].map(model=><option key={model}>{model}</option>)}</select><small>Test your key to confirm which of these it can reach. Requests use your Gemini quota.</small></div>
     <div className="gemini-buttons"><button className="secondary" disabled={disabled||!config.apiKey.trim()} onClick={()=>void action('test',async()=>{const reply=await send({type:'gemini:test',apiKey:config.apiKey});setModels(reply.models!);if(!reply.models!.includes(config.model))setConfig({...config,model:reply.models![0]});setMessage('Key accepted. Choose a model, then save.');})}><RefreshCw size={14}/>{busy==='test'?'Testing…':'Test key'}</button><button className="primary" disabled={disabled} onClick={save}><Check size={14}/>{busy==='save'?'Saving…':'Save settings'}</button></div>

@@ -1,4 +1,5 @@
 import './network-background';
+import {installFormPreload} from './form-preload';
 import { panelPageAction } from './panel-page';
 import { generateIdentities, generateValues, validateSettings, type Settings } from './data';
 import { generateSamples } from './samples';
@@ -13,8 +14,14 @@ const ALARM='gemini-cache-expiry';
 const MAX_BATCH_FIELDS=120;
 let cacheEpoch=0;
 const pendingBatches=new Map<string,Promise<CachedBatch>>();
+const cacheWrites=new Map<string,Promise<unknown>>();
+async function withCacheWrite<T>(key:string,write:()=>Promise<T>):Promise<T> {
+  const task=(cacheWrites.get(key) || Promise.resolve()).catch(()=>{}).then(write);
+  cacheWrites.set(key,task);
+  try{return await task;}finally{if(cacheWrites.get(key)===task)cacheWrites.delete(key);}
+}
 const prewarming=new Set<number>();
-const queuedReloads=new Map<number,chrome.tabs.Tab>();
+const queuedPreparations=new Map<number,{tab:chrome.tabs.Tab;documentId?:string}>();
 const protectStorage=chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
 
 async function pruneCache() {
@@ -33,6 +40,7 @@ async function pruneCache() {
 async function clearCache() {
   cacheEpoch++;
   pendingBatches.clear();
+  await Promise.allSettled([...cacheWrites.values()]);
   const stored=await chrome.storage.session.get(null);
   await chrome.storage.session.remove(Object.keys(stored).filter(key=>key.startsWith(CACHE_PREFIX)));
   await chrome.alarms.clear(ALARM);
@@ -43,8 +51,8 @@ async function status() {
   return {batches:active.length,suggestions:active.reduce((total,[,value])=>total+Object.values((value as CachedBatch).values).reduce((sum,values)=>sum+values.length,0),0),expiresAt:active.length?Math.min(...active.map(([,value])=>(value as CachedBatch).expiresAt)):null,lastMessage:typeof geminiStatus==='string'?geminiStatus:''};
 }
 
-async function prepareBatch(tabId:number,request:FillRequest,settings:Settings,config:GeminiConfig,epoch:number) {
-  const scans=await chrome.scripting.executeScript({target:{tabId},func:fillPage,args:[{...request,mode:'scan'}]});
+async function prepareBatch(tabId:number,request:FillRequest,settings:Settings,config:GeminiConfig,epoch:number,generate=true,documentId?:string) {
+  const scans=await chrome.scripting.executeScript({target:documentId?{tabId,documentIds:[documentId]}:{tabId},func:fillPage,args:[{...request,mode:'scan'}]});
   const scan=scans[0]?.result;
   if(!scan) throw new Error('The form could not be inspected. Local filling is still available.');
   if(request.expectedDocument && request.expectedDocument!==scan.documentId) throw new Error('The page changed. Refresh the field list.');
@@ -60,26 +68,30 @@ async function prepareBatch(tabId:number,request:FillRequest,settings:Settings,c
   // surrounding form changes, and only genuinely new or exhausted fields cost a request.
   const missing=fields.filter(field=>!cached?.values[field.signature!]?.length);
   if(!missing.length) return {scan,cacheKey,batch:cached,note:'Used cached Gemini suggestions.'};
+  if(!generate)return {scan,cacheKey,batch:cached,note:'AI data is not ready for every field yet. Used local data immediately.'};
   const pendingKey=`${cacheKey}:${await digest(missing.map(field=>field.signature))}`;
   let work=pendingBatches.get(pendingKey);
   if(!work) {
     work=(async()=>{
       const generated=await generateSuggestions(config,missing,settings.locale);
       if(epoch!==cacheEpoch) throw new Error('Gemini settings or cache changed. Local values were used.');
-      const latest=liveBatch((await chrome.storage.session.get(cacheKey))[cacheKey]);
-      const values:Record<string,string[]>={};
-      for(const field of fields) {
-        const suggested=generated[field.id] ?? latest?.values[field.signature!];
-        if(suggested?.length) values[field.signature!]=suggested;
-      }
-      for(const [signature,suggested] of Object.entries(latest?.values || {})) {
-        if(Object.keys(values).length>=MAX_BATCH_FIELDS) break;
-        if(!(signature in values) && suggested.length) values[signature]=suggested;
-      }
-      // Adding fields must not keep older suggestions alive beyond their original deadline.
-      const fresh={expiresAt:latest?.expiresAt ?? Date.now()+config.cacheMinutes*60*1000,values};
-      if(epoch!==cacheEpoch) throw new Error('Gemini settings or cache changed. Local values were used.');
-      await chrome.storage.session.set({[cacheKey]:fresh});
+      const fresh=await withCacheWrite(cacheKey,async()=>{
+        const latest=liveBatch((await chrome.storage.session.get(cacheKey))[cacheKey]);
+        const values:Record<string,string[]>={};
+        for(const field of fields) {
+          const suggested=generated[field.id] ?? latest?.values[field.signature!];
+          if(suggested?.length) values[field.signature!]=suggested;
+        }
+        for(const [signature,suggested] of Object.entries(latest?.values || {})) {
+          if(Object.keys(values).length>=MAX_BATCH_FIELDS) break;
+          if(!(signature in values) && suggested.length) values[signature]=suggested;
+        }
+        // Adding fields must not keep older suggestions alive beyond their original deadline.
+        const fresh={expiresAt:latest?.expiresAt ?? Date.now()+config.cacheMinutes*60*1000,values};
+        if(epoch!==cacheEpoch) throw new Error('Gemini settings or cache changed. Local values were used.');
+        await chrome.storage.session.set({[cacheKey]:fresh});
+        return fresh;
+      });
       await pruneCache();
       return fresh;
     })();
@@ -90,9 +102,9 @@ async function prepareBatch(tabId:number,request:FillRequest,settings:Settings,c
   return {scan,cacheKey,batch,note:cached?'Gemini added suggestions for the new fields.':'Gemini generated a fresh batch.'};
 }
 
-async function prepareOnReload(tabId:number,tab:chrome.tabs.Tab) {
+async function prepareForPage(tabId:number,tab:chrome.tabs.Tab,documentId?:string) {
   if(!tab.url || !/^https?:/.test(tab.url)) return;
-  if(prewarming.has(tabId)){queuedReloads.set(tabId,tab);return;}
+  if(prewarming.has(tabId)){queuedPreparations.set(tabId,{tab,documentId});return;}
   prewarming.add(tabId);
   try {
     await protectStorage;
@@ -100,14 +112,14 @@ async function prepareOnReload(tabId:number,tab:chrome.tabs.Tab) {
     const settings=validateSettings(stored.settings),config=validateGemini(stored.gemini);
     if(!config.enabled || !config.apiKey || !settings.fillUnknown) return;
     const epoch=cacheEpoch;
-    const prepared=await prepareBatch(tabId,{...settings,values:generateValues(settings.locale)},settings,config,epoch);
+    const prepared=await prepareBatch(tabId,{...settings,values:generateValues(settings.locale)},settings,config,epoch,true,documentId);
     if(epoch===cacheEpoch) await chrome.storage.session.set({geminiStatus:prepared.batch?'Gemini suggestions are ready. Click Formly to fill.':prepared.note});
   } catch(error) {
     await chrome.storage.session.set({geminiStatus:error instanceof Error?`${error.message} Local fallback is available.`:'Gemini preparation failed. Local fallback is available.'});
   } finally {
     prewarming.delete(tabId);
-    const queued=queuedReloads.get(tabId);queuedReloads.delete(tabId);
-    if(queued) void prepareOnReload(tabId,queued).catch(()=>{});
+    const queued=queuedPreparations.get(tabId);queuedPreparations.delete(tabId);
+    if(queued) void prepareForPage(tabId,queued.tab,queued.documentId).catch(()=>{});
   }
 }
 
@@ -129,8 +141,7 @@ async function fillClickedTab(tab: chrome.tabs.Tab, expectedDocument?:string) {
     const epoch=cacheEpoch;
     if(config.enabled && config.apiKey && settings.fillUnknown) {
       try {
-        await chrome.action.setBadgeText({tabId,text:'AI'});
-        const prepared=await prepareBatch(tabId,request,settings,config,epoch);
+        const prepared=await prepareBatch(tabId,request,settings,config,epoch,false);
         request.expectedDocument=prepared.scan.documentId;
         note=prepared.note;cacheKey=prepared.cacheKey;batch=prepared.batch;
         signatures=new Map((prepared.scan.unknown || []).map(field=>[field.id,field.signature!]));
@@ -153,14 +164,16 @@ async function fillClickedTab(tab: chrome.tabs.Tab, expectedDocument?:string) {
     if(!result) throw new Error('The page did not respond. Click to try again.');
     if(result.stale) throw new Error('The page changed while generating data. Click Formly again.');
     if(batch && cacheKey && signatures && epoch===cacheEpoch && batch.expiresAt>Date.now()) {
-      for(const [id,value] of Object.entries(result.used || {})) {
-        const signature=signatures.get(id);
-        if(!signature) continue;
-        const values=batch.values[signature];
-        const index=values?.indexOf(value) ?? -1;
-        if(index>=0) batch.values[signature]=values.slice(index+1);
-      }
-      await chrome.storage.session.set({[cacheKey]:batch});
+      await withCacheWrite(cacheKey,async()=>{
+        const latest=liveBatch((await chrome.storage.session.get(cacheKey!))[cacheKey!]);
+        if(!latest || epoch!==cacheEpoch)return;
+        for(const [id,value] of Object.entries(result.used || {})) {
+          const signature=signatures!.get(id);if(!signature)continue;
+          const values=latest.values[signature];const index=values?.indexOf(value) ?? -1;
+          if(index>=0)latest.values[signature]=values.slice(index+1);
+        }
+        await chrome.storage.session.set({[cacheKey!]:latest});
+      });
     }
     await chrome.action.setBadgeBackgroundColor({tabId,color:result.filled?'#5370ce':'#80704d'});
     await chrome.action.setBadgeText({tabId,text:String(result.filled)});
@@ -184,11 +197,11 @@ chrome.runtime.onInstalled.addListener(details=>{
 chrome.storage.onChanged.addListener((changes,area)=>{
   if(area==='local' && changes.settings && JSON.stringify(validateSettings(changes.settings.oldValue).exclusions)!==JSON.stringify(validateSettings(changes.settings.newValue).exclusions)) void clearCache().catch(()=>{});
 });
-chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{if(change.status==='complete') void prepareOnReload(tabId,tab).catch(()=>{});});
+const syncFormPreload=installFormPreload(prepareForPage);
 chrome.action.onClicked.addListener(tab=>fillClickedTab(tab).catch(()=>{}));
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) void pruneCache().catch(()=>{});});
 chrome.tabs.onRemoved.addListener(tabId=>{
-  queuedReloads.delete(tabId);
+  queuedPreparations.delete(tabId);
   void chrome.storage.session.get(null).then(stored=>chrome.storage.session.remove(Object.keys(stored).filter(key=>key.startsWith(`${CACHE_PREFIX}${tabId}:`)))).catch(()=>{});
 });
 chrome.runtime.onMessage.addListener((message:unknown,sender,sendResponse)=>{
@@ -204,6 +217,7 @@ chrome.runtime.onMessage.addListener((message:unknown,sender,sendResponse)=>{
         if(config.enabled && !config.apiKey) throw new Error('Enter your API key before enabling Gemini.');
         await chrome.storage.local.set({gemini:config});await clearCache();
         await chrome.storage.session.remove('geminiStatus');
+        await syncFormPreload();
         return {config,status:await status()};
       }
       case 'gemini:test': return {models:await listModels(typeof msg.apiKey==='string'?msg.apiKey:'')};

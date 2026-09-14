@@ -56,7 +56,7 @@ function Welcome() {
       <section className="make-yours" aria-labelledby="yours-title">
         <div className="section-label"><span>A LITTLE MORE YOU</span><h2 id="yours-title">Your forms. Your rules.</h2><p>Ready out of the box, with room to make it yours.</p></div>
         <div className="feature-links">
-          <a href="./index.html#gemini"><Sparkles size={22}/><h3>Give unfamiliar fields context</h3><p>Add a Gemini key to prepare relevant suggestions when a website reloads. Filling still waits for your click.</p><span>Set up Gemini <ArrowUpRight size={16}/></span></a>
+          <a href="./index.html#gemini"><Sparkles size={22}/><h3>Give unfamiliar fields context</h3><p>Add a Gemini key to prepare relevant suggestions as forms appear, including dialogs. Filling still waits for your click.</p><span>Set up Gemini <ArrowUpRight size={16}/></span></a>
           <a href="./index.html#excluded"><SlidersHorizontal size={22}/><h3>Keep the right fields untouched</h3><p>Search and navigation controls are skipped by default. Add your own exclusions for any website.</p><span>Choose exclusions <ArrowUpRight size={16}/></span></a>
           <a href="./index.html#cache"><Clock3 size={22}/><h3>Set the pace of your cache</h3><p>Keep suggestions for 1–60 minutes, or clear them whenever you like. Five minutes is the starting point.</p><span>Manage your cache <ArrowUpRight size={16}/></span></a>
         </div>

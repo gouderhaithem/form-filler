@@ -104,10 +104,10 @@ Local generation works without an account or API key. To add contextual suggesti
 1. Open **Options → Gemini** and enter your key from [Google AI Studio](https://aistudio.google.com/apikey).
 2. Click **Test key** to check which supported models your key can reach. This lists models; it does not generate test data.
 3. Enable **Use Gemini for unknown fields**, then click **Save settings**.
-4. Accept the browser’s website-access request. This lets Formly prepare suggestions automatically when websites load or reload.
-5. Reload a website with a form, then click Formly when you want to fill it.
+4. Accept the browser’s website-access request. This lets Formly prepare suggestions automatically when websites load, forms appear later, or you return to a tab.
+5. Open a website or dialog containing a form. Formly prepares data in the background, including on pages that were already open. Click Formly when you want to fill it.
 
-**Reloading prepares data; clicking fills the form.** A request asks for up to ten suggestions for each of up to 30 unknown fields. Recognized fields, custom rules, dropdowns, and radio groups use the local engine. Unanswered fields or failed requests fall back to local data.
+**Forms appearing prepares data; clicking fills immediately.** Late-rendered forms and forms revealed in dialogs are detected automatically. Hidden tabs wait until visible. Clicking Fill does not start or wait for a Gemini request; if AI is pending or unavailable, the local generator fills immediately. A request asks for up to ten suggestions for each of up to 30 unknown fields. Recognized fields, custom rules, dropdowns, and radio groups use the local engine. Unanswered fields or failed requests fall back to local data.
 
 Gemini uses your Google project’s quota and billing settings. Formly briefly retries temporary errors before falling back. Model availability depends on your key; use **Test key** to check access.
 
@@ -122,9 +122,9 @@ In **Options → Gemini → Suggestion cache**:
 | **Clear cache** | Removes all cached suggestions immediately without removing your key or changing your expiry setting. |
 | **Cache status** | Shows the number of suggestions and batches, plus a countdown to the next batch expiry. |
 
-Batches are isolated by tab, website origin, language, model, and key. Each field keeps its remaining suggestions when the surrounding form changes. Only new or exhausted fields need another request. Adding fields does **not** extend the existing batch’s expiry.
+Batches are isolated by tab, website origin, language, model, and key. Each field keeps its remaining suggestions when the surrounding form changes. Only new or exhausted fields need another request when background detection runs. Normal typing and unrelated DOM changes do not repeatedly request data. Adding fields does **not** extend the existing batch’s expiry.
 
-Clicks consume suggestions in order. Reloading the same form reuses the remaining batch until it expires. After clearing or expiry, the next eligible page load or toolbar click prepares a fresh batch. Memory is bounded to 24 batches, with up to 120 field signatures per batch.
+Clicks consume suggestions in order. Reloading the same form reuses the remaining batch until it expires. After clearing or expiry, the next eligible page load, form change, or return to the tab prepares a fresh batch. A click uses available cache or local data; it never triggers an AI fetch. Memory is bounded to 24 batches, with up to 120 field signatures per batch.
 
 Suggestions live in session memory. Expiry is checked before filling, and a cleanup alarm removes expired entries. If the browser delays an alarm while sleeping, expired values are still rejected on the next access. Extension reloads, disabling the extension, or a browser restart clear this [session storage](https://developer.chrome.com/docs/extensions/reference/api/storage#property-session).
 
